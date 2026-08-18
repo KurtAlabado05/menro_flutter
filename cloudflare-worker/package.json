@@ -1,0 +1,16 @@
+{
+  "name": "cenro-cloudflare-worker",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.7.9"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  }
+}
+
