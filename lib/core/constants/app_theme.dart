@@ -223,4 +223,102 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData get darkTheme {
+    final darkColorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.darkPrimary,
+      brightness: Brightness.dark,
+      primary: AppColors.darkPrimary,
+      secondary: AppColors.darkPrimaryLight,
+      surface: AppColors.darkCardBg,
+      error: const Color(0xFFEF5350),
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: darkColorScheme,
+      textTheme: _buildTextTheme().apply(
+        bodyColor: AppColors.darkTextPrimary,
+        displayColor: AppColors.darkTextPrimary,
+      ),
+      scaffoldBackgroundColor: AppColors.darkBackground,
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.darkCardBg,
+        foregroundColor: AppColors.darkTextPrimary,
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 2,
+        titleTextStyle: GoogleFonts.poppins(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: AppColors.darkTextPrimary,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 2,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+        color: AppColors.darkCardBg,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.grey[800],
+        selectedColor: AppColors.darkPrimary.withValues(alpha: 0.2),
+        labelStyle: GoogleFonts.poppins(fontSize: 13, color: AppColors.darkTextPrimary),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.darkCardBg,
+        indicatorColor: AppColors.darkPrimary.withValues(alpha: 0.2),
+        elevation: 8,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? AppColors.darkPrimary : AppColors.darkTextSecondary,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? AppColors.darkPrimary : AppColors.darkTextSecondary,
+          );
+        }),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.grey[900],
+        labelStyle: GoogleFonts.poppins(
+          color: AppColors.darkTextSecondary,
+          fontSize: 14,
+        ),
+        hintStyle: GoogleFonts.poppins(color: AppColors.darkTextSecondary),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.mdAll,
+          borderSide: BorderSide(color: Colors.grey[800]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdAll,
+          borderSide: BorderSide(color: Colors.grey[800]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdAll,
+          borderSide: const BorderSide(color: AppColors.darkPrimary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdAll,
+          borderSide: const BorderSide(color: Color(0xFFEF5350)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.mdAll,
+          borderSide: const BorderSide(color: Color(0xFFEF5350), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.lg,
+        ),
+      ),
+    );
+  }
 }

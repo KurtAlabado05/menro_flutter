@@ -58,4 +58,19 @@ class AppColors {
 
   // Surface variants
   static const Color surfaceLight = Color(0xFFF0F4F0);
+
+  // Dark Mode Colors
+  static const Color darkBackground = Color(0xFF121212);
+  static const Color darkCardBg = Color(0xFF1E1E1E);
+  static const Color darkTextPrimary = Color(0xFFFFFFFF);
+  static const Color darkTextSecondary = Color(0xFFB0B0B0);
+  static const Color darkPrimary = Color(0xFF66BB6A);
+  static const Color darkPrimaryLight = Color(0xFF81C784);
+
+  // Gradients (for use with LinearGradient, RadialGradient)
+  static const List<Color> primaryGradient = [primary, primaryDark];
+  static const List<Color> accentGradient = [accentTeal, accentBlue];
+  static const List<Color> successGradient = [Color(0xFF66BB6A), Color(0xFF2E7D32)];
+  static const List<Color> warningGradient = [Color(0xFFFFB74D), Color(0xFFFFA000)];
+  static const List<Color> errorGradient = [Color(0xFFEF5350), Color(0xFFD32F2F)];
 }
