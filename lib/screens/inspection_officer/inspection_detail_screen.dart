@@ -218,7 +218,11 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
                   const SizedBox(height: 16),
                   _DocumentsSection(documents: application.documents),
                   if (application.type == 'tree_cutting_permit') ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    _PermitDetailsSection(
+                      permitData: application.raw,
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton.tonalIcon(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
@@ -868,6 +872,141 @@ class _ActionBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PermitDetailsSection extends StatelessWidget {
+  final Map<String, dynamic> permitData;
+
+  const _PermitDetailsSection({required this.permitData});
+
+  @override
+  Widget build(BuildContext context) {
+    final species = permitData['species'] ?? '';
+    final numberOfTrees = permitData['numberOfTrees'] ?? 0;
+    final reasonForCutting = permitData['reasonForCutting'] ?? '';
+    final locationCategory = permitData['locationCategory'] ?? '';
+    final treePictures = List<String>.from(permitData['treePicturesPaths'] ?? []);
+    final speciesId = permitData['speciesIdentification'] as Map<String, dynamic>?;
+
+    return _SectionCard(
+      title: 'Permit Details',
+      subtitle: 'Tree cutting application information.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DetailRow(label: 'Tree Species', value: species),
+          _DetailRow(label: 'Number of Trees', value: numberOfTrees.toString()),
+          _DetailRow(label: 'Reason for Cutting', value: reasonForCutting),
+          _DetailRow(label: 'Location Category', value: locationCategory),
+          if (speciesId != null && speciesId.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Species Identification',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textGrey,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (speciesId['photoPath'] != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  speciesId['photoPath'] as String,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(Icons.image_not_supported),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+          if (treePictures.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Tree Photos',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textGrey,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 120,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: treePictures.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, index) => ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    treePictures[index],
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 120,
+                      height: 120,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textGrey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '—' : value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
