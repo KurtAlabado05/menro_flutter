@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../providers/notification_provider.dart';
+import '../../core/constants/app_tokens.dart';
 import '../../models/notification_model.dart';
+import '../../providers/notification_provider.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/skeleton_loader.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -16,7 +19,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NotificationProvider>().loadNotifications();
+      if (mounted) context.read<NotificationProvider>().loadNotifications();
     });
   }
 
@@ -44,11 +47,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case NotificationType.projectUpdate:
         return AppColors.primary;
       case NotificationType.comment:
-        return AppColors.accentCoral;
       case NotificationType.mention:
         return AppColors.accentCoral;
       case NotificationType.badgeEarned:
-        return Colors.amber;
+        return Colors.amber.shade800;
       case NotificationType.system:
         return AppColors.textGrey;
     }
@@ -56,10 +58,143 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   String _timeAgo(DateTime date) {
     final diff = DateTime.now().difference(date);
+    if (diff.inDays >= 7) {
+      return '${date.day}/${date.month}/${date.year}';
+    }
     if (diff.inDays > 0) return '${diff.inDays}d ago';
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  Widget _buildBody(NotificationProvider provider) {
+    final items = provider.notifications;
+
+    if (provider.isLoading && items.isEmpty) {
+      return const SkeletonList(count: 6);
+    }
+
+    if (items.isEmpty) {
+      final Widget empty;
+      if (provider.error != null) {
+        empty = EmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'Could not load notifications',
+          subtitle: 'Check your connection and try again.',
+          actionLabel: 'Retry',
+          actionIcon: Icons.refresh,
+          onAction: provider.loadNotifications,
+        );
+      } else {
+        empty = EmptyState(
+          icon: provider.notificationsEnabled
+              ? Icons.notifications_none_outlined
+              : Icons.notifications_off_outlined,
+          title: provider.notificationsEnabled
+              ? 'No notifications yet'
+              : 'In-app notifications are turned off',
+          subtitle: provider.notificationsEnabled
+              ? 'Updates on your reports, permits and projects will show up here.'
+              : 'You can turn them back on in Settings.',
+        );
+      }
+      // Scrollable so pull-to-refresh also works on the empty state.
+      return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: empty,
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+      itemBuilder: (context, index) {
+        final n = items[index];
+        final color = _colorForType(n.type);
+        return Semantics(
+          label: '${n.isRead ? '' : 'Unread. '}${n.title}. ${n.body}',
+          excludeSemantics: true,
+          button: !n.isRead,
+          child: Material(
+            color: n.isRead
+                ? AppColors.cardWhite
+                : AppColors.primary.fade(0.06),
+            borderRadius: AppRadius.mdAll,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: n.isRead ? null : () => provider.markAsRead(n.id),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: color.fade(0.12),
+                      child: Icon(_iconForType(n.type), color: color, size: 20),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            n.title,
+                            style: TextStyle(
+                              fontWeight: n.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            n.body,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _timeAgo(n.timestamp),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textGrey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!n.isRead) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -68,85 +203,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
-          Consumer<NotificationProvider>(
-            builder: (context, provider, _) {
-              if (provider.unreadCount == 0) return const SizedBox.shrink();
+          Selector<NotificationProvider, int>(
+            selector: (_, p) => p.unreadCount,
+            builder: (context, unread, _) {
+              if (unread == 0) return const SizedBox.shrink();
               return TextButton(
-                onPressed: () => provider.markAllAsRead(),
-                child: const Text('Mark all read', style: TextStyle(color: Colors.white)),
+                onPressed: context.read<NotificationProvider>().markAllAsRead,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: const Text('Mark all read'),
               );
             },
           ),
         ],
       ),
       body: Consumer<NotificationProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
-
-          if (provider.notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No notifications yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: provider.notifications.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final n = provider.notifications[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: _colorForType(n.type).withOpacity(0.1),
-                  child: Icon(_iconForType(n.type), color: _colorForType(n.type), size: 20),
-                ),
-                title: Text(
-                  n.title,
-                  style: TextStyle(
-                    fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Text(n.body, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(_timeAgo(n.timestamp), style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                  ],
-                ),
-                trailing: n.isRead
-                    ? null
-                    : Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                onTap: () {
-                  if (!n.isRead) provider.markAsRead(n.id);
-                },
-              );
-            },
-          );
-        },
+        builder: (context, provider, _) => RefreshIndicator(
+          onRefresh: provider.loadNotifications,
+          child: _buildBody(provider),
+        ),
       ),
     );
   }
 }
-

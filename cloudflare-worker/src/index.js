@@ -1,4 +1,5 @@
 
+import { handleOrganizationAdminRequest } from './organizationAdmin.js';
 
 const DROPDOWN_ALIASES = {
   Mahogany: ['swietenia macrophylla', 'mahogany', 'big-leaf mahogany'],
@@ -146,6 +147,10 @@ export default {
     const url = new URL(request.url);
 
     try {
+      if (url.pathname.startsWith('/organization-admin/')) {
+        return await handleOrganizationAdminRequest(request, env);
+      }
+
       if (request.method === 'POST' && url.pathname.endsWith('/uploadEvidence')) {
         const formData = await request.formData();
         const file = formData.get('file');

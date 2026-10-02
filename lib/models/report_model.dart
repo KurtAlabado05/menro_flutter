@@ -49,6 +49,8 @@ class ReportModel {
     this.statusHistory = const [],
   });
 
+  DateTime get expiresAt => submittedAt.add(const Duration(hours: 48));
+
   factory ReportModel.fromFirestore(Map<String, dynamic> json, String docId) {
     return ReportModel(
       id: docId,
@@ -180,6 +182,7 @@ class ReportModel {
     'submittedByContact': submittedByContact,
     'isAnonymous': isAnonymous,
     'submittedAt': FieldValue.serverTimestamp(),
+    'expiresAt': Timestamp.fromDate(expiresAt),
     'severity': severity,
     'statusHistory': statusHistory
         .map(

@@ -3,9 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/status_config.dart'; // 🟢 IMPORTED CENTRALIZED STATUS CONFIG
-import '../../screens/report/report_details_screen.dart';
+import '../../core/constants/app_tokens.dart';
+import '../../core/constants/status_config.dart';
+import '../../widgets/activity_list_tile.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/skeleton_loader.dart';
+import '../report/report_details_screen.dart';
 import 'report_input_screen.dart';
 
 class ReportSubmissionsHubScreen extends StatefulWidget {
@@ -27,10 +30,8 @@ class _ReportSubmissionsHubScreenState
     return null;
   }
 
-  bool _isResolvedReportStatus(String status) {
-    final normalized = status.toLowerCase().trim();
-    return normalized == 'resolved';
-  }
+  bool _isResolvedReportStatus(String status) =>
+      status.toLowerCase().trim() == 'resolved';
 
   String _formatShortDate(DateTime? dt) {
     if (dt == null) return '—';
@@ -49,21 +50,15 @@ class _ReportSubmissionsHubScreenState
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Failed to load report submissions: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
+          return EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load your reports',
+            subtitle: 'Check your connection and try again.',
           );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          );
+          return const SkeletonList(count: 3);
         }
 
         final docs = snapshot.data?.docs ?? [];
@@ -86,12 +81,11 @@ class _ReportSubmissionsHubScreenState
         }
 
         return ListView.builder(
-          // 🟢 REMOVED TOP WHITE GAP GAP AND PROVIDED CLEARANCE FOR THE FLOATING ACTION BUTTON AT THE BOTTOM
-          padding: const EdgeInsets.only(
-            top: 8,
-            bottom: 88,
-            left: 16,
-            right: 16,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            96,
           ),
           itemCount: filtered.length,
           itemBuilder: (context, index) {
@@ -103,89 +97,24 @@ class _ReportSubmissionsHubScreenState
             final location = (data['location'] as String?)?.trim() ?? '';
             final submittedAt = _safeTimestampToDate(data['submittedAt']);
 
-            final rawHistory = data['statusHistory'];
-            final history = rawHistory is List ? rawHistory : const [];
-            final latestMessage = history.isNotEmpty
-                ? ((history.last as Map?)?['message'] as String?)?.trim() ?? ''
-                : '';
-            final hasMenroUpdate = latestMessage.isNotEmpty;
-
-            final displayMid = location.isNotEmpty
+            final subtitle = location.isNotEmpty
                 ? (submittedAt == null
                       ? location
                       : '$location • ${_formatShortDate(submittedAt)}')
-                : '—';
+                : 'Submitted • ${_formatShortDate(submittedAt)}';
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                margin: EdgeInsets.zero,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReportDetailsScreen(reportId: doc.id),
-                      ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                category.isEmpty ? 'Uncategorized' : category,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            // 🟢 REPLACED LOCAL WIDGET CHIP ENGINE WITH UNIFIED STATUS CONFIG BADGE
-                            StatusConfig.buildBadge(status),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          displayMid,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Spacer(),
-                            Icon(
-                              hasMenroUpdate
-                                  ? Icons.message_outlined
-                                  : Icons.notifications_none_outlined,
-                              size: 18,
-                              color: hasMenroUpdate
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ActivityListTile(
+                icon: Icons.flag_outlined,
+                color: StatusConfig.getColor(status),
+                title: category.isEmpty ? 'Uncategorized' : category,
+                subtitle: subtitle,
+                status: status,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ReportDetailsScreen(reportId: doc.id),
                   ),
                 ),
               ),
@@ -202,7 +131,6 @@ class _ReportSubmissionsHubScreenState
     final currentUserId = currentUser?.uid;
 
     if (currentUserId == null || currentUserId.trim().isEmpty) {
-      // 🟢 REMOVED EXPLICIT 'const' FROM SCAFFOLD TO AVOID CONSTANT BOUNDARY ERRORS WITH APPCOLORS
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
@@ -218,30 +146,6 @@ class _ReportSubmissionsHubScreenState
       length: 2,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textDark,
-          title: const Text(
-            'My Reports',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          bottom: const TabBar(
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textGrey,
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 3,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            unselectedLabelStyle: TextStyle(
-              fontWeight: FontWeight.normal,
-              fontSize: 13,
-            ),
-            tabs: [
-              Tab(text: 'Active'),
-              Tab(text: 'Resolved'),
-            ],
-          ),
-        ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
             Navigator.push(
@@ -254,10 +158,29 @@ class _ReportSubmissionsHubScreenState
           icon: const Icon(Icons.add_a_photo),
           label: const Text('New Report'),
         ),
-        body: TabBarView(
+        body: Column(
           children: [
-            _buildReportsTab(resolved: false, currentUserId: currentUserId),
-            _buildReportsTab(resolved: true, currentUserId: currentUserId),
+            const TabBar(
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textGrey,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 3,
+              tabs: [Tab(text: 'Active'), Tab(text: 'Resolved')],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildReportsTab(
+                    resolved: false,
+                    currentUserId: currentUserId,
+                  ),
+                  _buildReportsTab(
+                    resolved: true,
+                    currentUserId: currentUserId,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

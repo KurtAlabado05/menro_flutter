@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/account_type.dart';
 import '../models/user_model.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -9,6 +10,7 @@ class AuthProvider extends ChangeNotifier {
 
   UserModel? _userModel;
   bool _isLoading = false;
+  bool _isInitialized = false;
 
   AuthProvider() {
     _checkCurrentUser();
@@ -17,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   UserModel? get user => _userModel;
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _userModel != null;
+  bool get isInitialized => _isInitialized;
 
   // ─── On App Start ─────────────────────────────────────────────────────────
 
@@ -25,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
     if (firebaseUser != null) {
       await _loadUserFromFirestore(firebaseUser.uid);
     }
+    _isInitialized = true;
     notifyListeners();
   }
 
@@ -45,7 +49,7 @@ class AuthProvider extends ChangeNotifier {
           id: firebaseUser.uid,
           email: firebaseUser.email ?? '',
           name: firebaseUser.displayName ?? 'User',
-          role: 'individual',
+          role: 'citizen',
           joinedAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
         );
 
@@ -60,7 +64,7 @@ class AuthProvider extends ChangeNotifier {
           id: firebaseUser.uid,
           email: firebaseUser.email ?? '',
           name: firebaseUser.displayName ?? 'User',
-          role: 'individual',
+          role: 'citizen',
           joinedAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
         );
       }
@@ -113,7 +117,10 @@ class AuthProvider extends ChangeNotifier {
         id: uid,
         email: data['email'],
         name: data['name'] ?? 'New User',
-        role: data['role'] ?? 'individual',
+        role: data['role'] ?? data['accountType'] ?? 'citizen',
+        accountType: AccountType.fromStoredValue(
+          data['accountType'] ?? data['role'],
+        ),
         contactPerson: data['contactPerson'],
         phoneNumber: data['phoneNumber'],
         completeAddress: data['completeAddress'],

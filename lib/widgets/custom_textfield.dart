@@ -7,12 +7,15 @@ class CustomTextField extends StatefulWidget {
   final String label;
   final IconData prefixIcon;
   final bool isPassword;
+  final bool enabled;
   final TextInputType keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
   final int maxLines;
 
-  // Expose validator and inputFormatters configurations
   final String? Function(String?)? validator;
   final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onFieldSubmitted;
 
   const CustomTextField({
     super.key,
@@ -20,10 +23,14 @@ class CustomTextField extends StatefulWidget {
     required this.label,
     required this.prefixIcon,
     this.isPassword = false,
+    this.enabled = true,
     this.keyboardType = TextInputType.text,
+    this.textInputAction,
+    this.autofillHints,
     this.maxLines = 1,
-    this.validator, // Initialize parameter
-    this.inputFormatters, // Initialize parameter
+    this.validator,
+    this.inputFormatters,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -37,55 +44,30 @@ class _CustomTextFieldState extends State<CustomTextField> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
-
-      // Pass properties from the parent widget configuration structure
+      enabled: widget.enabled,
       validator: widget.validator,
       inputFormatters: widget.inputFormatters,
-
-      // Password fields must always be single-line
+      onFieldSubmitted: widget.onFieldSubmitted,
+      textInputAction: widget.textInputAction,
+      autofillHints: widget.autofillHints,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       obscureText: widget.isPassword ? _obscureText : false,
       maxLines: widget.isPassword ? 1 : widget.maxLines,
-
       keyboardType: widget.keyboardType,
-
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: const TextStyle(color: AppColors.textGrey),
-
         prefixIcon: Icon(widget.prefixIcon, color: AppColors.textGrey),
-
-        // Show eye icon only for password fields
         suffixIcon: widget.isPassword
             ? IconButton(
+                tooltip: _obscureText ? 'Show password' : 'Hide password',
                 icon: Icon(
                   _obscureText ? Icons.visibility_off : Icons.visibility,
                   color: AppColors.textGrey,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _obscureText = !_obscureText;
-                  });
-                },
+                onPressed: () => setState(() => _obscureText = !_obscureText),
               )
             : null,
-
-        filled: true,
-        fillColor: AppColors.cardWhite,
-
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
       ),
     );
   }

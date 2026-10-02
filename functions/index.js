@@ -9,6 +9,10 @@ const cloudinary = require('cloudinary').v2;
 const axios = require('axios');
 const FormData = require('form-data');
 const admin = require('firebase-admin');
+const {
+  OrganizationRegistrationError,
+  createOrganizationHandlers,
+} = require('./organization_registration');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -167,6 +171,107 @@ uploadApp.post('/uploadEvidence', upload.single('file'), async (req, res) => {
 });
 
 exports.uploadEvidence = functions.https.onRequest(uploadApp);
+
+const organizationHandlers = createOrganizationHandlers({
+  db: admin.firestore(),
+  auth: admin.auth(),
+  fieldValue: admin.firestore.FieldValue,
+  secret: process.env.ORG_REGISTRY_HMAC_KEY,
+});
+
+exports.submitOrganizationApplication = functions
+  .runWith({ secrets: ['ORG_REGISTRY_HMAC_KEY'] })
+  .https.onCall(async (data, context) => {
+    try {
+      return await organizationHandlers.submitApplication(data, context);
+    } catch (error) {
+      if (error instanceof OrganizationRegistrationError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      console.error('submitOrganizationApplication failed:', error);
+      throw new functions.https.HttpsError('internal', 'Unable to submit the organization request.');
+    }
+  });
+
+exports.reviewOrganizationApplication = functions
+  .https.onCall(async (data, context) => {
+    try {
+      return await organizationHandlers.reviewApplication(data, context);
+    } catch (error) {
+      if (error instanceof OrganizationRegistrationError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      console.error('reviewOrganizationApplication failed:', error);
+      throw new functions.https.HttpsError('internal', 'Unable to review the organization application.');
+    }
+  });
+
+exports.updateOrganizationPermitDocument = functions
+  .https.onCall(async (data, context) => {
+    try {
+      return await organizationHandlers.updateOrganizationPermit(data, context);
+    } catch (error) {
+      if (error instanceof OrganizationRegistrationError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      console.error('updateOrganizationPermitDocument failed:', error);
+      throw new functions.https.HttpsError('internal', 'Unable to update the organization permit.');
+    }
+  });
+
+exports.listPendingOrganizationApplications = functions
+  .https.onCall(async (_data, context) => {
+    try {
+      return await organizationHandlers.listPendingApplications(context);
+    } catch (error) {
+      if (error instanceof OrganizationRegistrationError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      console.error('listPendingOrganizationApplications failed:', error);
+      throw new functions.https.HttpsError('internal', 'Unable to load organization applications.');
+    }
+  });
+
+exports.rejectOrganizationLookupRequest = functions
+  .https.onCall(async (data, context) => {
+    try {
+      return await organizationHandlers.rejectLookupRequest(data, context);
+    } catch (error) {
+      if (error instanceof OrganizationRegistrationError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      console.error('rejectOrganizationLookupRequest failed:', error);
+      throw new functions.https.HttpsError('internal', 'Unable to review the representative request.');
+    }
+  });
+
+// Archive reports after their 48-hour active window so they no longer block
+// new submissions or appear in the public report feed.
+exports.archiveExpiredReports = functions.pubsub
+  .schedule('every 1 hours')
+  .onRun(async () => {
+    const now = admin.firestore.Timestamp.now();
+    const snapshot = await admin
+      .firestore()
+      .collection('reports')
+      .where('expiresAt', '<=', now)
+      .get();
+
+    if (snapshot.empty) return null;
+    const batch = admin.firestore().batch();
+    snapshot.docs.forEach((doc) => {
+      const status = String(doc.data().status || '').toLowerCase().trim();
+      if (!['resolved', 'completed', 'closed', 'archived'].includes(status)) {
+        batch.update(doc.ref, {
+          status: 'archived',
+          archivedAt: now,
+          archiveReason: 'Automatically archived after 48 hours',
+        });
+      }
+    });
+    await batch.commit();
+    return null;
+  });
 
 // ─── identifySpecies ──────────────────────────────────────────────────────────
 

@@ -229,7 +229,18 @@ class _ReportLocationPickerScreenState
       final enabled = await Geolocator.isLocationServiceEnabled();
       if (!enabled) return;
 
-      final pos = await Geolocator.getCurrentPosition();
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      final granted =
+          permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always;
+      if (!granted) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
       if (!mounted) return;
 
       final p = LatLng(pos.latitude, pos.longitude);
@@ -444,10 +455,10 @@ class _ReportLocationPickerScreenState
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade700.withOpacity(0.10),
+                  color: AppColors.primary.withOpacity(0.10),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.place, color: Colors.blue.shade700, size: 18),
+                child: const Icon(Icons.place, color: AppColors.primary, size: 18),
               ),
               const SizedBox(width: 10),
               const Text(
@@ -511,7 +522,7 @@ class _ReportLocationPickerScreenState
                 Navigator.pop(context, result);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -529,7 +540,7 @@ class _ReportLocationPickerScreenState
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.blue.shade700),
+        Icon(icon, size: 16, color: AppColors.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -564,7 +575,7 @@ class _ReportLocationPickerScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pick Location'),
-        backgroundColor: Colors.blue.shade700,
+        backgroundColor: AppColors.primary,
         actions: [
           TextButton(
             onPressed: canConfirm ? _confirm : null,
@@ -601,12 +612,27 @@ class _ReportLocationPickerScreenState
                   polygons: [
                     Polygon(
                       points: _baliwagPolygon,
-                      color: Colors.blue.withOpacity(0.08),
-                      borderColor: Colors.blue.shade600,
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderColor: AppColors.primary,
                       borderStrokeWidth: 3.0,
                     ),
                   ],
                 ),
+                if (_selected != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        width: 44,
+                        height: 44,
+                        point: _selected!,
+                        builder: (ctx) => const Icon(
+                          Icons.location_on,
+                          color: AppColors.primaryDark,
+                          size: 42,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -622,9 +648,9 @@ class _ReportLocationPickerScreenState
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.shade200),
+                          color: AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
                       ),
                       child: const Text(
                         'Tap the map inside the Baliwag boundary to choose the exact location.',

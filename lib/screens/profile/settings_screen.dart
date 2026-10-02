@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
-import '../auth/login_screen.dart';
+import '../../providers/notification_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,9 +13,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
-  bool _darkModePlaceholder = false;
   bool _isLoading = false;
+  bool _isSavingPreference = false;
 
   // Handles resetting password via Firebase Auth email trigger
   Future<void> _handlePasswordReset() async {
@@ -48,75 +47,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Visual dialog for account deletion confirmation (App Store compliant requirement)
-  Future<void> _confirmAccountDeletion() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.red,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Delete Account',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-            ),
-          ],
-        ),
-        content: const Text(
-          'This action is permanent and cannot be undone. All your reported issues, files, and permit history will be permanently deleted.',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.textGrey,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textGrey),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Delete Forever'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Account re-authentication required to delete account permanently.',
-          ),
-        ),
+  Future<void> _setNotificationsEnabled(bool enabled) async {
+    setState(() => _isSavingPreference = true);
+    try {
+      await context.read<AuthProvider>().updatePrivacySettings(
+        allowNotifs: enabled,
       );
+      await context.read<NotificationProvider>().loadNotifications();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save notification setting: $error'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingPreference = false);
     }
   }
 
@@ -161,27 +108,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildSwitchTile(
                       icon: Icons.notifications_none_rounded,
                       iconColor: AppColors.primary,
-                      title: 'Push Notifications',
-                      subtitle: 'Receive updates regarding status reports',
-                      value: _notificationsEnabled,
-                      onChanged: (val) =>
-                          setState(() => _notificationsEnabled = val),
-                    ),
-                    _buildDivider(),
-                    _buildSwitchTile(
-                      icon: Icons.dark_mode_outlined,
-                      iconColor: Colors.indigo,
-                      title: 'Dark Mode',
-                      subtitle: 'Toggle dark interface preference',
-                      value: _darkModePlaceholder,
-                      onChanged: (val) {
-                        setState(() => _darkModePlaceholder = val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Theme settings coming soon!'),
-                          ),
-                        );
-                      },
+                      title: 'In-app notifications',
+                      subtitle: 'Show account updates and unread badges',
+                      value:
+                          context
+                              .watch<AuthProvider>()
+                              .user
+                              ?.allowNotifications ??
+                          true,
+                      onChanged: _isSavingPreference
+                          ? null
+                          : _setNotificationsEnabled,
                     ),
                   ]),
 
@@ -207,46 +144,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 8),
                   _buildSettingsContainer([
                     _buildActionTile(
-                      icon: Icons.description_outlined,
-                      iconColor: Colors.teal,
-                      title: 'Terms of Service',
-                      subtitle: 'Review user rules and regulations',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildActionTile(
-                      icon: Icons.privacy_tip_outlined,
-                      iconColor: Colors.blue,
-                      title: 'Privacy Policy',
-                      subtitle: 'Data usage governance practices',
-                      onTap: () {},
-                    ),
-                    _buildDivider(),
-                    _buildActionTile(
                       icon: Icons.info_outline_rounded,
                       iconColor: AppColors.textGrey,
                       title: 'App Version',
-                      subtitle: 'v1.0.0 (Production Setup Build)',
+                      subtitle: 'v1.0.0',
                       trailing: const SizedBox.shrink(),
                       onTap: null,
                     ),
                   ]),
-
-                  const SizedBox(height: 32),
-
-                  // ── DANGER ZONE ───────────────────────────────
-                  const _SettingHeader(title: 'Danger Zone', isDanger: true),
-                  const SizedBox(height: 8),
-                  _buildSettingsContainer([
-                    _buildActionTile(
-                      icon: Icons.delete_forever_rounded,
-                      iconColor: Colors.red,
-                      title: 'Delete My Account',
-                      subtitle: 'Permanently remove all your user footprints',
-                      titleColor: Colors.red,
-                      onTap: _confirmAccountDeletion,
-                    ),
-                  ], borderHighlight: Colors.red.withOpacity(0.15)),
 
                   const SizedBox(height: 40),
                 ],
@@ -341,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
   }) {
     return SwitchListTile.adaptive(
       value: value,

@@ -40,6 +40,8 @@ class StatusConfig {
         return _inspectionInProgress;
       case 'forwarded_to_denr':
       case 'forwarded to denr':
+      case 'forwarded_to_denr_officer':
+      case 'forwarded to denr officer':
       case 'for denr review':
       case 'denr review':
         return _forwardedToDENR;

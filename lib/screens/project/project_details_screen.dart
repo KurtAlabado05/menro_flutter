@@ -47,11 +47,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50], // Provides subtle contrast behind cards
-      // 🟢 RESTORED APPBAR: This provides the header layout and the back navigation button
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
@@ -59,9 +58,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
         title: const Text(
           'Project Details',
           style: TextStyle(
-            color: Colors.black87,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 20,
           ),
         ),
         centerTitle: true,
@@ -81,7 +79,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
               userId != null && project.participants.contains(userId);
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

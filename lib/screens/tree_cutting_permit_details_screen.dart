@@ -6,6 +6,7 @@ import '../core/constants/app_colors.dart';
 import '../core/constants/status_config.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/status_chat_box.dart';
 
 class TreeCuttingPermitDetailsScreen extends StatefulWidget {
   final String permitId;
@@ -37,6 +38,28 @@ class _TreeCuttingPermitDetailsScreenState
     return null;
   }
 
+  String _safeString(dynamic value, [String fallback = '']) {
+    if (value == null) return fallback;
+    if (value is String) return value.trim();
+    if (value is Map) {
+      for (final key in ['url', 'secure_url', 'downloadUrl', 'value', 'name', 'label']) {
+        final nested = value[key];
+        if (nested is String && nested.trim().isNotEmpty) return nested.trim();
+      }
+    }
+    return value.toString().trim();
+  }
+
+  String? _safeNullableString(dynamic value) {
+    final parsed = _safeString(value);
+    return parsed.isEmpty ? null : parsed;
+  }
+
+  List<String> _safeStringList(dynamic value) {
+    if (value is! List) return const [];
+    return value.map(_safeString).where((item) => item.isNotEmpty).toList();
+  }
+
   String _timeAgo(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return '${diff.inDays}d ago';
@@ -61,7 +84,10 @@ class _TreeCuttingPermitDetailsScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Permit Details')),
+      appBar: AppBar(
+        title: const Text('Permit Details'),
+        leading: const BackButton(),
+      ),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _loadPermit(),
         builder: (context, snapshot) {
@@ -93,74 +119,75 @@ class _TreeCuttingPermitDetailsScreenState
           }
 
           // Fields mapping extraction safely
-          final kindOfTree =
-              (permit['kindOfTree'] as String?)?.trim() ??
-              'Tree Cutting Application';
+          final kindOfTree = _safeString(
+            permit['kindOfTree'],
+            'Tree Cutting Application',
+          );
           final numberOfTrees = permit['numberOfTrees'] ?? 0;
-          final status = (permit['status'] as String?)?.trim() ?? 'pending';
-          final trackingNo = (permit['trackingNo'] as String?)?.trim() ?? 'N/A';
+          final status = _safeString(permit['status'], 'pending');
+          final trackingNo = _safeString(permit['trackingNo'], 'N/A');
           final submittedAt =
               _safeTimestampToDate(permit['submittedAt']) ?? DateTime.now();
 
-          final applicantName =
-              (permit['applicantName'] as String?)?.trim() ??
-              'Unknown Applicant';
-          final email = (permit['email'] as String?)?.trim() ?? '—';
-          final contactNumber =
-              (permit['contactNumber'] as String?)?.trim() ?? '—';
-          final address = (permit['address'] as String?)?.trim() ?? '—';
+          final applicantName = _safeString(
+            permit['applicantName'],
+            'Unknown Applicant',
+          );
+          final email = _safeString(permit['email'], '—');
+          final contactNumber = _safeString(permit['contactNumber'], '—');
+          final address = _safeString(permit['address'], '—');
 
           // File attachments map path mapping
           final uploadedPaths = permit['uploadedPaths'];
           final paths = uploadedPaths is Map ? uploadedPaths : null;
 
-          final requestLetterUrl = paths?['letterOfRequestPath'] as String?;
-          final lguBarangayCertificationUrl =
-              paths?['barangayClearancePath'] as String?;
-          final landTitleUrl = paths?['landTitlePath'] as String?;
-          final ptaPresidentCertificationUrl =
-              paths?['ptaPresidentCertificationPath'] as String?;
+            final requestLetterUrl =
+              _safeNullableString(paths?['letterOfRequestPath']);
+            final lguBarangayCertificationUrl =
+              _safeNullableString(paths?['barangayClearancePath']);
+            final landTitleUrl = _safeNullableString(paths?['landTitlePath']);
+            final ptaPresidentCertificationUrl =
+              _safeNullableString(paths?['ptaPresidentCertificationPath']);
 
-          final treePicturesPaths =
-              (paths?['treePicturesPaths'] as List?)?.cast<dynamic>() ?? [];
-          final treePicturesUrls = treePicturesPaths
-              .whereType<String>()
-              .toList();
+            final treePicturesUrls = _safeStringList(paths?['treePicturesPaths']);
 
           final speciesIdentification = permit['speciesIdentification'];
           final speciesIdMap =
               speciesIdentification is Map ? speciesIdentification : null;
-          final aiScientificName =
-              (speciesIdMap?['suggestedScientificName'] as String?)?.trim();
-          final aiCommonNames =
-              (speciesIdMap?['suggestedCommonNames'] as List?)?.cast<String>() ??
-              const [];
+            final aiScientificName =
+              _safeNullableString(speciesIdMap?['suggestedScientificName']);
+            final aiCommonNames =
+              _safeStringList(speciesIdMap?['suggestedCommonNames']);
           final aiConfidence = (speciesIdMap?['confidence'] as num?)?.toDouble();
-          final aiEvidenceUrls =
-              (speciesIdMap?['evidencePhotoUrls'] as List?)?.cast<String>() ??
-              const [];
+            final aiEvidenceUrls =
+              _safeStringList(speciesIdMap?['evidencePhotoUrls']);
 
           // Status timeline structure array extraction from firestore safely
-          final rawHistory = permit['statusHistory'] as List<dynamic>? ?? [];
+            final rawHistory = permit['statusHistory'] is List
+              ? permit['statusHistory'] as List
+              : const [];
           final statusHistory = rawHistory.map((item) {
             // 1. Safely handle the map conversion to prevent subtype casting crashes
             final map = item is Map ? item : {};
             
             return {
-              'status': map['status'] ?? 'pending',
-              'message': map['message'] ?? '',
+              'status': _safeString(map['status'], 'pending'),
+              'message': _safeString(map['message']),
               // 2. Fallback check for both 'timestamp' and 'updatedAt' keys
               'timestamp': _safeTimestampToDate(map['timestamp'] ?? map['updatedAt']) ?? DateTime.now(),
-              'updatedBy': map['updatedBy'],
+              'updatedBy': _safeNullableString(map['updatedBy']),
             };
           }).toList();
+            final latestStatusMessage = statusHistory.isEmpty
+              ? null
+              : statusHistory.last['message']?.toString();
 
           return RefreshIndicator(
             onRefresh: () => _loadPermit().then((_) => setState(() {})),
             color: AppColors.primary,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -286,7 +313,7 @@ class _TreeCuttingPermitDetailsScreenState
                         _buildInfoRow(
                           Icons.verified_outlined,
                           'Application Type',
-                          (permit['applicationType'] as String?)?.trim() ?? '—',
+                          _safeString(permit['applicationType'], '—'),
                         ),
                         const Divider(height: 24),
                         _buildInfoRow(
@@ -449,6 +476,16 @@ class _TreeCuttingPermitDetailsScreenState
                   ),
                   const SizedBox(height: 24),
 
+                  StatusChatBox(
+                    collectionName: 'tree_cutting_permits',
+                    documentId: widget.permitId,
+                    ownerUid: _safeNullableString(permit['submittedByUid']),
+                    status: status,
+                    latestStatusMessage: latestStatusMessage,
+                    title: 'Permit Conversation',
+                  ),
+                  const SizedBox(height: 24),
+
                   // 5. Attachments Grid Checklist Container
                   const Text(
                     'Submitted Attachments Checklist',
@@ -595,10 +632,12 @@ class _TreeCuttingPermitDetailsScreenState
     required bool isLatest,
     required bool isLast,
   }) {
-    final config = StatusConfig.fromStatus(update['status'] as String);
+    final config = StatusConfig.fromStatus(_safeString(update['status'], 'pending'));
     final color = config.color;
-    final timestamp = update['timestamp'] as DateTime;
-    final updatedBy = update['updatedBy'] as String?;
+    final timestamp = update['timestamp'] is DateTime
+        ? update['timestamp'] as DateTime
+        : DateTime.now();
+    final updatedBy = _safeNullableString(update['updatedBy']);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,

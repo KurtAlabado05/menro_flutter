@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:math' as math;
 import '../models/report_model.dart';
+
+class DuplicateReportException implements Exception {
+  final ReportModel existingReport;
+
+  const DuplicateReportException(this.existingReport);
+}
 
 class ReportProvider extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -22,6 +29,73 @@ class ReportProvider extends ChangeNotifier {
 
   bool hasUpvoted(String reportId) => _upvotedByMe.contains(reportId);
 
+  static const Duration _reportLifetime = Duration(hours: 48);
+  static const double _duplicateRadiusMeters = 35;
+
+  Future<ReportModel?> findNearbyActiveReport(ReportModel report) async {
+    if (report.latitude == null || report.longitude == null) return null;
+
+    final snapshot = await _db
+        .collection('reports')
+        .where('category', isEqualTo: report.category)
+        .get();
+    final now = DateTime.now();
+
+    ReportModel? closest;
+    var closestDistance = double.infinity;
+    for (final doc in snapshot.docs) {
+      final candidate = ReportModel.fromFirestore(doc.data(), doc.id);
+      final status = candidate.status.toLowerCase().trim();
+      final isResolved = {
+        'resolved',
+        'completed',
+        'closed',
+        'archived',
+      }.contains(status);
+      if (isResolved || now.difference(candidate.submittedAt) > _reportLifetime) {
+        continue;
+      }
+
+      final distance = _distanceInMeters(
+        report.latitude!,
+        report.longitude!,
+        candidate.latitude,
+        candidate.longitude,
+      );
+      if (distance <= _duplicateRadiusMeters && distance < closestDistance) {
+        closest = candidate;
+        closestDistance = distance;
+      }
+    }
+    return closest;
+  }
+
+  Future<void> addMeToo(String reportId) async {
+    if (!hasUpvoted(reportId)) {
+      await toggleUpvoteReport(reportId);
+    }
+  }
+
+  double _distanceInMeters(
+    double latitude1,
+    double longitude1,
+    double? latitude2,
+    double? longitude2,
+  ) {
+    if (latitude2 == null || longitude2 == null) return double.infinity;
+    const earthRadiusMeters = 6371000.0;
+    final lat1 = latitude1 * math.pi / 180;
+    final lat2 = latitude2 * math.pi / 180;
+    final deltaLat = (latitude2 - latitude1) * math.pi / 180;
+    final deltaLon = (longitude2 - longitude1) * math.pi / 180;
+    final a = math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
+        math.cos(lat1) *
+            math.cos(lat2) *
+            math.sin(deltaLon / 2) *
+            math.sin(deltaLon / 2);
+    return earthRadiusMeters * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
   // ─── Load All Reports ─────────────────────────────────────────────────────
 
   Future<void> loadReports() async {
@@ -35,8 +109,9 @@ class ReportProvider extends ChangeNotifier {
           .orderBy('submittedAt', descending: true)
           .get();
 
-      _reports = snapshot.docs
+        _reports = snapshot.docs
           .map((doc) => ReportModel.fromFirestore(doc.data(), doc.id))
+          .where(_isActiveReport)
           .toList();
 
       await _loadMyUpvotes();
@@ -47,6 +122,17 @@ class ReportProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  bool _isActiveReport(ReportModel report) {
+    final status = report.status.toLowerCase().trim();
+    return !{
+          'resolved',
+          'completed',
+          'closed',
+          'archived',
+        }.contains(status) &&
+        DateTime.now().difference(report.submittedAt) <= _reportLifetime;
   }
 
   // ─── Load My Reports ──────────────────────────────────────────────────────
@@ -108,6 +194,11 @@ class ReportProvider extends ChangeNotifier {
 
     try {
       debugPrint('📝 Submitting report to Firestore...');
+
+      final nearbyReport = await findNearbyActiveReport(report);
+      if (nearbyReport != null) {
+        throw DuplicateReportException(nearbyReport);
+      }
 
       // Save to reports collection
       final docRef = _db.collection('reports').doc();

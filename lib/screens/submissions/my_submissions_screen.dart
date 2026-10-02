@@ -3,12 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_tokens.dart';
 import '../../core/constants/status_config.dart';
-import '../../screens/report/report_details_screen.dart';
-import '../../screens/report/report_screen.dart';
-import '../../screens/tree_cutting_application_screen.dart';
-import '../../screens/tree_cutting_permit_details_screen.dart';
+import '../../widgets/activity_list_tile.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/skeleton_loader.dart';
+import '../report/report_details_screen.dart';
+import '../tree_cutting_permit_details_screen.dart';
+import 'report_input_screen.dart';
 
 class MySubmissionsScreen extends StatefulWidget {
   const MySubmissionsScreen({super.key});
@@ -27,81 +29,12 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
     return null;
   }
 
-  bool _isResolvedReportStatus(String status) {
-    final normalized = status.toLowerCase().trim();
-    return normalized == 'resolved';
-  }
+  bool _isResolvedReportStatus(String status) =>
+      status.toLowerCase().trim() == 'resolved';
 
   String _formatShortDate(DateTime? dt) {
     if (dt == null) return '—';
-    final s = dt.toLocal().toString().split('.').first;
-    return s;
-  }
-
-  // Reports status mapping to your chip requirements
-  ({String label, Color color}) _reportsChip(String status) {
-    final normalized = status.toLowerCase().trim().replaceAll('_', ' ');
-
-    if (_isResolvedReportStatus(status)) {
-      return (label: '🟢 Resolved', color: Colors.green);
-    }
-
-    // Pending Review = pending/submitted variants
-    if (normalized == 'submitted' || normalized == 'pending') {
-      return (label: '🟠 Pending Review', color: Colors.orange);
-    }
-
-    // In Progress = inspection_in_progress, forwarded, approved, etc (non-resolved)
-    return (label: '🔵 In Progress', color: Colors.blue);
-  }
-
-  // Tree cutting permit status mapping to your workflow requirements
-  ({String label, Color color}) _permitChip(String status) {
-    final normalized = status.toLowerCase().trim().replaceAll('_', ' ');
-
-    switch (normalized) {
-      case 'draft':
-        return (label: '⚪ Draft', color: Colors.grey);
-      case 'under review':
-      case 'inspection in progress':
-      case 'inspection in progress ': // tolerate
-        return (label: '🟠 Under Review', color: Colors.orange);
-      case 'site inspection scheduled':
-        return (label: '🟣 Site Inspection Scheduled', color: Colors.purple);
-      case 'approved':
-      case 'approved by denr':
-      case 'denr approved':
-        return (label: '🟢 Approved', color: Colors.green);
-      case 'denied':
-      case 'rejected':
-        return (label: '🔴 Denied', color: Colors.red);
-      default:
-        // Fallback to existing backend statuses
-        if (normalized == 'resolved') {
-          return (label: '🟢 Approved', color: Colors.green);
-        }
-        // submitted/inspection/forwarded map to Under Review/In Progress group
-        return (label: '🟠 Under Review', color: Colors.orange);
-    }
-  }
-
-  Widget _buildStatusChip({required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.35)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
-      ),
-    );
+    return dt.toLocal().toString().split('.').first;
   }
 
   Widget _reportsTab({required bool resolved, required String currentUserId}) {
@@ -113,21 +46,15 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Failed to load report submissions: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
+          return EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load your reports',
+            subtitle: 'Check your connection and try again.',
           );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          );
+          return const SkeletonList(count: 3);
         }
 
         final docs = snapshot.data?.docs ?? [];
@@ -142,7 +69,7 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
             icon: Icons.cleaning_services_outlined,
             title: resolved
                 ? 'No resolved reports yet.'
-                : "You haven't reported any issues yet. Help keep the community clean!",
+                : "You haven't reported any issues yet.",
             subtitle: resolved
                 ? 'Resolved reports will appear here once MENRO completes the action.'
                 : 'Tap the button below to file your first report.',
@@ -150,7 +77,12 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            96,
+          ),
           itemCount: filtered.length,
           itemBuilder: (context, index) {
             final doc = filtered[index];
@@ -161,96 +93,24 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
             final location = (data['location'] as String?)?.trim() ?? '';
             final submittedAt = _safeTimestampToDate(data['submittedAt']);
 
-            final chip = _reportsChip(status);
-
-            final rawHistory = data['statusHistory'];
-            final history = rawHistory is List ? rawHistory : const [];
-            final latestMessage = history.isNotEmpty
-                ? ((history.last as Map?)?['message'] as String?)?.trim() ?? ''
-                : '';
-            final hasMenroUpdate = latestMessage.isNotEmpty;
-
-            final locOrDate = (location.isNotEmpty)
-                ? location
-                : 'Submitted • ${_formatShortDate(submittedAt)}';
-
-            final displayMid = location.isNotEmpty
+            final subtitle = location.isNotEmpty
                 ? (submittedAt == null
                       ? location
                       : '$location • ${_formatShortDate(submittedAt)}')
-                : '—';
+                : 'Submitted • ${_formatShortDate(submittedAt)}';
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReportDetailsScreen(reportId: doc.id),
-                      ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                category.isEmpty ? 'Uncategorized' : category,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            _buildStatusChip(
-                              label: chip.label,
-                              color: chip.color,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          displayMid,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Spacer(),
-                            Icon(
-                              hasMenroUpdate
-                                  ? Icons.message_outlined
-                                  : Icons.notifications_none_outlined,
-                              size: 18,
-                              color: hasMenroUpdate
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ActivityListTile(
+                icon: Icons.flag_outlined,
+                color: StatusConfig.getColor(status),
+                title: category.isEmpty ? 'Uncategorized' : category,
+                subtitle: subtitle,
+                status: status,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ReportDetailsScreen(reportId: doc.id),
                   ),
                 ),
               ),
@@ -273,47 +133,39 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Failed to load tree cutting permits: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
+          return EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load your permits',
+            subtitle: 'Check your connection and try again.',
           );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          );
+          return const SkeletonList(count: 3);
         }
 
         final docs = snapshot.data?.docs ?? [];
         final filtered = docs.where((doc) {
           final status = (doc.data()['status'] as String?)?.trim() ?? '';
-          final normalized = status.toLowerCase().trim();
-          final isResolved =
-              normalized == 'approved_by_denr' ||
-              normalized == 'approved_by_denr' ||
-              normalized == 'approved' ||
-              normalized == 'resolved' ||
-              normalized == 'denr approved';
+          final isResolved = StatusConfig.isCompletedStatus(status);
           return resolved ? isResolved : !isResolved;
         }).toList();
 
         if (filtered.isEmpty) {
           return EmptyState(
             icon: Icons.note_alt_outlined,
-            title:
-                'No ${resolved ? 'resolved' : 'active'} permit applications.',
+            title: 'No ${resolved ? 'resolved' : 'active'} permit applications.',
             subtitle: 'Tap below to start a new request.',
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            96,
+          ),
           itemCount: filtered.length,
           itemBuilder: (context, index) {
             final doc = filtered[index];
@@ -326,91 +178,22 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
                 : 'Permit Application #$applicationId';
 
             final status = (data['status'] as String?)?.trim() ?? '';
-            final chip = _permitChip(status);
-
             final justification =
                 (data['reasonForRequest'] as String?)?.trim() ?? '';
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            TreeCuttingPermitDetailsScreen(permitId: doc.id),
-                      ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                permitNo,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            _buildStatusChip(
-                              label: chip.label,
-                              color: chip.color,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        if (justification.isNotEmpty) ...[
-                          Text(
-                            justification,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textGrey,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      TreeCuttingPermitDetailsScreen(
-                                        permitId: doc.id,
-                                      ),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'View Details',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ActivityListTile(
+                icon: Icons.park_outlined,
+                color: StatusConfig.getColor(status),
+                title: permitNo,
+                subtitle: justification.isEmpty ? null : justification,
+                status: status,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        TreeCuttingPermitDetailsScreen(permitId: doc.id),
                   ),
                 ),
               ),
@@ -438,8 +221,6 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
       );
     }
 
-    // New system flow: two hubs inside same screen using tabs.
-    // Tabs: Active (reports + permits) and Resolved (reports + permits)
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -472,7 +253,7 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ReportScreen()),
+              MaterialPageRoute(builder: (_) => const ReportInputScreen()),
             );
           },
           backgroundColor: AppColors.primary,
@@ -482,9 +263,7 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
         ),
         body: TabBarView(
           children: [
-            // Active: show violation reports + active permits in same scroll view
             _buildCompositeHub(currentUserId: currentUserId, resolved: false),
-            // Resolved
             _buildCompositeHub(currentUserId: currentUserId, resolved: true),
           ],
         ),
@@ -500,7 +279,12 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
             child: Text(
               resolved ? 'Resolved Reports' : 'Active Reports',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -519,13 +303,15 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
               ),
               const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: const Text(
                   'Tree Cutting Permits',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
               SizedBox(
@@ -535,7 +321,7 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
                   currentUserId: currentUserId,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),

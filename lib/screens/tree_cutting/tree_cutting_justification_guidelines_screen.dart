@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_tokens.dart';
 
 class TreeCuttingJustificationGuidelinesScreen extends StatelessWidget {
   const TreeCuttingJustificationGuidelinesScreen({super.key});
 
-  static const List<_ReasonGuideline> reasons = [
+  static const List<_ReasonGuideline> _reasons = [
     _ReasonGuideline(
       title: 'Poses structural hazard to house / property',
       whatItMeans:
@@ -124,9 +125,9 @@ class TreeCuttingJustificationGuidelinesScreen extends StatelessWidget {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: reasons.length,
+        itemCount: _reasons.length,
         itemBuilder: (context, i) {
-          final r = reasons[i];
+          final r = _reasons[i];
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: _ReasonCard(guideline: r),
@@ -207,9 +208,9 @@ class _ReasonCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.06),
+                color: AppColors.primary.fade(0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+                border: Border.all(color: AppColors.primary.fade(0.18)),
               ),
               child: Text(
                 guideline.citation!,

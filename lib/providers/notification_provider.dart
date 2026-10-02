@@ -9,10 +9,12 @@ class NotificationProvider extends ChangeNotifier {
 
   List<NotificationModel> _notifications = [];
   bool _isLoading = false;
+  bool _notificationsEnabled = true;
   String? _error;
 
   List<NotificationModel> get notifications => _notifications;
   bool get isLoading => _isLoading;
+  bool get notificationsEnabled => _notificationsEnabled;
   String? get error => _error;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
@@ -30,6 +32,14 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final profileSnapshot = await _db.collection('users').doc(uid).get();
+      _notificationsEnabled =
+          profileSnapshot.data()?['allowNotifications'] != false;
+      if (!_notificationsEnabled) {
+        _notifications = [];
+        return;
+      }
+
       final snapshot = await _db
           .collection('notifications')
           .where('userId', isEqualTo: uid)
@@ -61,9 +71,7 @@ class NotificationProvider extends ChangeNotifier {
     }
 
     try {
-      await _db.collection('notifications').doc(id).update({
-        'isRead': true,
-      });
+      await _db.collection('notifications').doc(id).update({'isRead': true});
       debugPrint('✅ Notification marked as read: $id');
     } catch (e) {
       debugPrint('❌ markAsRead error: $e');
@@ -82,7 +90,9 @@ class NotificationProvider extends ChangeNotifier {
     if (uid == null) return;
 
     // Optimistic update
-    _notifications = _notifications.map((n) => n.copyWith(isRead: true)).toList();
+    _notifications = _notifications
+        .map((n) => n.copyWith(isRead: true))
+        .toList();
     notifyListeners();
 
     try {

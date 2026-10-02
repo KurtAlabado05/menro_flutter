@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/status_config.dart';
-import '../../models/report_model.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/report_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/status_badge.dart';
+import '../../widgets/status_chat_box.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -55,7 +54,10 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Report Details')),
+      appBar: AppBar(
+        title: const Text('Report Details'),
+        leading: const BackButton(),
+      ),
       body: Consumer<ReportProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) {
@@ -81,7 +83,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
             color: AppColors.primary,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -261,45 +263,102 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    height: 200,
+                    height: 220,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.18),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: FlutterMap(
-                        options: MapOptions(
-                          center: LatLng(
-                            report.latitude ?? 14.9545,
-                            report.longitude ?? 120.9038,
-                          ),
-                          zoom: 16.0,
-                          interactiveFlags: InteractiveFlag.none,
-                        ),
+                      child: Stack(
                         children: [
-                          TileLayer(
-                            urlTemplate:
-                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.yourapp',
-                          ),
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: LatLng(
-                                  report.latitude ?? 14.9545,
-                                  report.longitude ?? 120.9038,
-                                ),
-                                width: 40,
-                                height: 40,
-                                builder: (ctx) => const Icon(
-                                  Icons.location_on,
-                                  color: Colors.red,
-                                  size: 40,
-                                ),
+                          FlutterMap(
+                            options: MapOptions(
+                              center: LatLng(
+                                report.latitude ?? 14.9545,
+                                report.longitude ?? 120.9038,
+                              ),
+                              zoom: 16.0,
+                              interactiveFlags: InteractiveFlag.none,
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.example.yourapp',
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: LatLng(
+                                      report.latitude ?? 14.9545,
+                                      report.longitude ?? 120.9038,
+                                    ),
+                                    width: 48,
+                                    height: 48,
+                                    builder: (ctx) => Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 5,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.location_on,
+                                        color: AppColors.primary,
+                                        size: 34,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
+                          ),
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.92),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 15,
+                                    color: AppColors.primary,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Reported location',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -307,56 +366,15 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 6. Enhanced Status Timeline Container
-                  const Text(
-                    'Status Timeline',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  StatusChatBox(
+                    collectionName: 'reports',
+                    documentId: report.id,
+                    ownerUid: report.submittedBy,
+                    status: report.status,
+                    statusHistory: report.statusHistory,
+                    title: 'Case Correspondence',
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 20,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: report.statusHistory.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text(
-                              'No progression status history recorded.',
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        : Column(
-                            children: [
-                              ...report.statusHistory.reversed
-                                  .toList()
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
-                                    final index = entry.key;
-                                    final update = entry.value;
-                                    final isLatest = index == 0;
-                                    final isLast =
-                                        index ==
-                                        report.statusHistory.length - 1;
-                                    return _buildTimelineTile(
-                                      update,
-                                      isLatest: isLatest,
-                                      isLast: isLast,
-                                    );
-                                  }),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
 
                   // 7. Bottom Interactivity Action Controls
                   Row(
@@ -463,117 +481,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                 ),
               ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimelineTile(
-    ReportStatusUpdate update, {
-    required bool isLatest,
-    required bool isLast,
-  }) {
-    final config = StatusConfig.fromStatus(update.status);
-    final color = config.color;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            const SizedBox(height: 3),
-            Container(
-              width: isLatest ? 16 : 12,
-              height: isLatest ? 16 : 12,
-              decoration: BoxDecoration(
-                color: isLatest ? color : color.withOpacity(0.55),
-                shape: BoxShape.circle,
-                border: isLatest
-                    ? Border.all(
-                        color: color.withOpacity(0.25),
-                        width: 3.5,
-                        strokeAlign: BorderSide.strokeAlignOutside,
-                      )
-                    : null,
-              ),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 54,
-                color: isLatest ? color.withOpacity(0.3) : Colors.grey[200],
-              ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      config.label.toUpperCase(),
-                      style: TextStyle(
-                        fontWeight: isLatest
-                            ? FontWeight.bold
-                            : FontWeight.w600,
-                        color: isLatest ? color : Colors.grey[600],
-                        fontSize: 13,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    Text(
-                      '${update.timestamp.hour}:${update.timestamp.minute.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isLatest ? Colors.grey[800] : Colors.grey[400],
-                        fontWeight: isLatest
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  update.message,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isLatest ? Colors.black87 : Colors.grey[600],
-                    fontWeight: isLatest ? FontWeight.w500 : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (update.updatedBy != null)
-                      Text(
-                        'By ${update.updatedBy}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isLatest ? Colors.grey[700] : Colors.grey[450],
-                          fontStyle: FontStyle.italic,
-                        ),
-                      )
-                    else
-                      const SizedBox.shrink(),
-                    Text(
-                      '${update.timestamp.day}/${update.timestamp.month}/${update.timestamp.year}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isLatest ? Colors.grey[600] : Colors.grey[400],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
         ),
       ],

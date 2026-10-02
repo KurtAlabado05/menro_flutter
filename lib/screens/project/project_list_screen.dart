@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_tokens.dart';
 import '../../models/project_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/project_card.dart';
+import '../../widgets/skeleton_loader.dart';
 
 import 'project_details_screen.dart';
 
@@ -144,7 +146,7 @@ class _ProjectListScreenState extends State<ProjectListScreen>
   @override
   Widget build(BuildContext context) {
     final user = context.read<AuthProvider>().user;
-    final isOrg = user?.role == 'organization';
+    final isOrg = user?.hasApprovedOrganizationAccess ?? false;
 
     // Important: This widget should NOT create its own Scaffold/AppBar.
     // It is intended to be displayed inside MainScreen (which already has
@@ -226,47 +228,17 @@ class _ProjectListScreenState extends State<ProjectListScreen>
             child: Consumer2<ProjectProvider, AuthProvider>(
               builder: (context, provider, auth, _) {
                 if (provider.isLoading && provider.projects.isEmpty) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  );
+                  return const SkeletonList(count: 4);
                 }
 
                 if (provider.error != null && provider.projects.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Failed to load projects',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          provider.error ?? 'Unknown error',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _loadProjects,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
+                  return EmptyState(
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Could not load projects',
+                    subtitle: 'Check your connection and try again.',
+                    actionLabel: 'Retry',
+                    actionIcon: Icons.refresh,
+                    onAction: _loadProjects,
                   );
                 }
 
@@ -296,13 +268,13 @@ class _ProjectListScreenState extends State<ProjectListScreen>
                         Container(
                           width: double.infinity,
                           margin: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md,
                           ),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(16),
+                            color: AppColors.primary.fade(0.08),
+                            borderRadius: AppRadius.lgAll,
                           ),
                           child: const Text(
                             'Showing admin-led cleanup and tree planting projects only. Join or cancel participation from the project cards below.',

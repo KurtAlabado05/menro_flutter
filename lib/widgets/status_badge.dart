@@ -20,33 +20,44 @@ class StatusBadge extends StatelessWidget {
     final config = StatusConfig.fromStatus(status);
     final color = config.color;
     final label = config.label;
+    final hsl = HSLColor.fromColor(color);
+    final textColor = hsl
+        .withLightness((hsl.lightness * 0.7).clamp(0.0, 0.35))
+        .toColor();
 
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: showIcon ? 8 : 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showIcon)
-            Icon(
-              config.icon,
-              size: fontSize != null ? fontSize! - 2 : 12,
-              color: color,
+    return Semantics(
+      label: 'Status: $label',
+      excludeSemantics: true,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: showIcon ? 8 : 10,
+          vertical: 4,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showIcon)
+              Icon(
+                config.icon,
+                size: fontSize != null ? fontSize! - 2 : 13,
+                color: textColor,
+              ),
+            if (showIcon) const SizedBox(width: 4),
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                color: textColor,
+                fontSize: fontSize ?? 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          if (showIcon) const SizedBox(width: 4),
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              color: color,
-              fontSize: fontSize ?? 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 import 'core/constants/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/feed_provider.dart';
+import 'providers/inspection_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/project_provider.dart';
 import 'providers/notification_provider.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/onboarding/app_entry_gate.dart';
 import 'firebase_service.dart';
 
 void main() async {
@@ -28,6 +29,8 @@ class CenroApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FeedProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
+        // Not auto-started: only the Inspection Officer shell calls start().
+        ChangeNotifierProvider(create: (_) => InspectionProvider()),
         ChangeNotifierProvider(
           create: (_) => NotificationProvider()..loadNotifications(),
         ),
@@ -36,7 +39,7 @@ class CenroApp extends StatelessWidget {
         title: 'EcoMap',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const LoginScreen(),
+        home: const AppEntryGate(),
       ),
     );
   }

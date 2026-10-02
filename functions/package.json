@@ -1,8 +1,12 @@
 {
   "name": "cenro-functions",
   "private": true,
-  "engines": { "node": "18" },
+  "engines": { "node": "20" },
   "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "migrate:organizations": "node migrate_legacy_organizations.js"
+  },
   "dependencies": {
     "axios": "^1.7.9",
     "cloudinary": "^2.4.0",

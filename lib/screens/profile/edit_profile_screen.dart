@@ -1,163 +1,25 @@
-import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_tokens.dart';
+import '../../core/constants/static_location_data.dart';
+import '../../models/account_type.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/cloudinary_image_service.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
-
-// --- STATIC LOCATION DATA ---
-const Map<String, Map<String, List<String>>> staticLocationData = {
-  'Bulacan': {
-    'Baliwag': [
-      'Bagong Nayon',
-      'Barangka',
-      'Calantipay',
-      'Catulinan',
-      'Concepcion',
-      'Hinukay',
-      'Makinabang',
-      'Matangtubig',
-      'Pagala',
-      'Paitan',
-      'Piel',
-      'Pinagbarilan',
-      'Poblacion',
-      'Sabang',
-      'San Jose',
-      'San Roque',
-      'Santa Barbara',
-      'Santo Cristo',
-      'Santo Niño',
-      'Subic',
-      'Sulivan',
-      'Tangos',
-      'Tarcan',
-      'Tiaong',
-      'Tibag',
-      'Virgen delas Flores',
-    ],
-    'Bocaue': [
-      'Antipona',
-      'Bagumbayan',
-      'Bambang',
-      'Batia',
-      'Biñang 1st',
-      'Biñang 2nd',
-      'Bolacan',
-      'Bunducan',
-      'Bunlo',
-      'Caingin',
-      'Duhat',
-      'Igulot',
-      'Lolomboy',
-      'Poblacion',
-      'Sulucan',
-      'Taal',
-      'Tambobong',
-      'Turo',
-      'Wakas',
-    ],
-    'Malolos': [
-      'Anilao',
-      'Atlag',
-      'Babatnin',
-      'Bagna',
-      'Bagong Bayan',
-      'Balayong',
-      'Balite',
-      'Bangkalingan',
-      'Barihan',
-      'Bulihan',
-      'Bungahan',
-      'Caingin',
-    ],
-  },
-  'Pampanga': {
-    'Candaba': [
-      'Bahay Pare',
-      'Bambang',
-      'Barit',
-      'Buas',
-      'Cuayang Bugtong',
-      'Dalayap',
-      'Dulong Ilog',
-      'Gulap',
-      'Lanang',
-      'Lourdes',
-      'Magumbali',
-      'Mandasig',
-      'Mandili',
-      'Mangga',
-      'Mapaniqui',
-      'Paligui',
-      'Pangclara',
-      'Pansinao',
-      'Paralaya',
-      'Pasig',
-      'Pescadores',
-      'Pulong Gubat',
-      'Pulong Palazan',
-      'Salapungan',
-      'San Agustin',
-      'Santo Rosario',
-      'Tagalog',
-      'Tenejero',
-      'Visal San Pablo',
-      'Visal Santo Cristo',
-    ],
-    'San Fernando': [
-      'Alasas',
-      'Baliti',
-      'Bulaon',
-      'Calulut',
-      'Dela Paz Norte',
-      'Dela Paz Sur',
-      'Dolores',
-      'Juliana',
-      'Lara',
-      'Lourdes',
-      'Magliman',
-      'Maimpis',
-      'Malino',
-    ],
-  },
-  'Metro Manila': {
-    'Quezon City': [
-      'Alicia',
-      'Amihan',
-      'Apolonio Samson',
-      'Bagbag',
-      'Bagumbayan',
-      'Bagumbuhay',
-      'Bahay Toro',
-      'Balingasa',
-      'Balong Bato',
-      'Batasan Hills',
-    ],
-    'Manila': [
-      'Binondo',
-      'Ermita',
-      'Intramuros',
-      'Malate',
-      'Paco',
-      'Pandacan',
-      'Port Area',
-      'Quiapo',
-      'Sampaloc',
-      'San Miguel',
-      'San Nicolas',
-      'Santa Ana',
-      'Santa Cruz',
-      'Tondo',
-    ],
-  },
-};
+import '../../widgets/empty_state.dart';
+import '../../widgets/section_widgets.dart';
+import '../../widgets/skeleton_loader.dart';
+import 'widgets/edit_profile_sections.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -167,268 +29,51 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const CloudinaryImageService _cloudinary = CloudinaryImageService(
+    cloudName: 'dfo5l4d4t',
+    uploadPreset: 'flutter_upload_preset',
+  );
+
   final _formKey = GlobalKey<FormState>();
   final _db = FirebaseFirestore.instance;
-  final _auth = FirebaseAuth.instance;
 
   bool _isLoading = true;
-  String _userRole =
-      'individual'; // Aligned with 'Screenshot_20260527-234356.jpg' schema
+  bool _isSaving = false;
+  bool _loadFailed = false;
+  bool _dirty = false;
+  bool _hasOrganizationApplication = false;
+  AccountType? _accountType = AccountType.citizen;
+  String _userRole = 'citizen';
   String _emailAddress = '';
 
-  // Location Hierarchy States
-  String? _selectedProvince;
-  String? _selectedCity;
-  String? _selectedBarangay;
+  String? _province;
+  String? _city;
+  String? _barangay;
 
-  List<String> _provinces = [];
-  List<String> _cities = [];
-  List<String> _barangays = [];
-
-  // Text Controllers
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _orgNameController = TextEditingController();
-  final _phoneNumberController = TextEditingController();
-  final _houseNumController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _houseController = TextEditingController();
   final _sitioController = TextEditingController();
   final _contactPersonController = TextEditingController();
   final _businessPermitController = TextEditingController();
 
-  // Document Variables
   Uint8List? _newDocBytes;
   String? _newDocFileName;
   String? _existingDocUrl;
 
-  final _phoneMaskFormatter = MaskTextInputFormatter(
+  final _phoneMask = MaskTextInputFormatter(
     mask: '####-###-####',
-    filter: {"#": RegExp(r'[0-9]')},
+    filter: {'#': RegExp(r'[0-9]')},
     type: MaskAutoCompletionType.lazy,
   );
-
-  final CloudinaryImageService _cloudinaryImageService =
-      const CloudinaryImageService(
-        cloudName: 'dfo5l4d4t',
-        uploadPreset: 'flutter_upload_preset',
-      );
 
   @override
   void initState() {
     super.initState();
-    _provinces = staticLocationData.keys.toList()..sort();
-    _fetchCurrentProfileData();
-  }
-
-  Future<void> _fetchCurrentProfileData() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final doc = await _db.collection('users').doc(user.uid).get();
-      if (!doc.exists) return;
-
-      final data = doc.data() ?? {};
-      _userRole = data['role'] ?? 'individual';
-      _emailAddress = data['email'] ?? '';
-
-      // Set Phone Number directly using database dash formatting format
-      _phoneNumberController.text = data['phoneNumber'] ?? '';
-
-      // Extract Name Blocks matching target role
-      final nameDetails = data['nameDetails'] as Map<String, dynamic>? ?? {};
-      if (_userRole == 'individual') {
-        _firstNameController.text = nameDetails['firstName'] ?? '';
-        _middleNameController.text = nameDetails['middleName'] ?? '';
-        _lastNameController.text = nameDetails['lastName'] ?? '';
-        _existingDocUrl = data['citizenNationalIdUrl'];
-      } else {
-        _orgNameController.text = nameDetails['organizationName'] ?? '';
-        final orgDetails =
-            data['organizationDetails'] as Map<String, dynamic>? ?? {};
-        _contactPersonController.text = orgDetails['contactPerson'] ?? '';
-        _businessPermitController.text =
-            orgDetails['businessPermitNumber'] ?? '';
-        _existingDocUrl = data['organizationPermitUrl'];
-      }
-
-      // Address Parsing
-      final address = data['addressDetails'] as Map<String, dynamic>? ?? {};
-      _houseNumController.text = address['houseNumber'] ?? '';
-      _sitioController.text = address['sitioOrSubdivision'] ?? '';
-
-      final savedProvince = address['province'] as String?;
-      final savedCity = address['city'] as String?;
-      final savedBarangay = address['barangay'] as String?;
-
-      if (savedProvince != null &&
-          staticLocationData.containsKey(savedProvince)) {
-        _selectedProvince = savedProvince;
-        _cities = staticLocationData[savedProvince]!.keys.toList()..sort();
-
-        if (savedCity != null &&
-            staticLocationData[savedProvince]!.containsKey(savedCity)) {
-          _selectedCity = savedCity;
-          _barangays = List<String>.from(
-            staticLocationData[savedProvince]![savedCity]!,
-          )..sort();
-
-          if (savedBarangay != null && _barangays.contains(savedBarangay)) {
-            _selectedBarangay = savedBarangay;
-          }
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error loading account data: $e')));
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _updateCitiesList(String province) {
-    setState(() {
-      _cities = staticLocationData[province]?.keys.toList() ?? [];
-      _cities.sort();
-    });
-  }
-
-  void _updateBarangaysList(String province, String city) {
-    setState(() {
-      _barangays = staticLocationData[province]?[city] ?? [];
-      _barangays.sort();
-    });
-  }
-
-  Future<void> _pickNewDocument() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
-      withData: true,
-    );
-    if (result == null || result.files.single.bytes == null) return;
-    final file = result.files.single;
-    setState(() {
-      _newDocBytes = file.bytes;
-      _newDocFileName = file.name;
-    });
-  }
-
-  Future<String?> _uploadFileToCloudinary({
-    required Uint8List? bytes,
-    required String? fileName,
-  }) async {
-    if (bytes == null || fileName == null) return null;
-    final lower = fileName.toLowerCase();
-    final isImage =
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png');
-
-    if (isImage) {
-      return _cloudinaryImageService.uploadImage(
-        bytes: bytes,
-        fileName: fileName,
-      );
-    }
-    return _cloudinaryImageService.uploadRawFile(
-      bytes: bytes,
-      fileName: fileName,
-    );
-  }
-
-  Future<void> _handleSaveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_selectedBarangay == null ||
-        _selectedCity == null ||
-        _selectedProvince == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please complete your address details")),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final user = _auth.currentUser;
-      if (user == null) throw Exception('No authenticated user session found');
-
-      String? updatedDocUrl = _existingDocUrl;
-      if (_newDocBytes != null && _newDocFileName != null) {
-        final cloudUrl = await _uploadFileToCloudinary(
-          bytes: _newDocBytes,
-          fileName: _newDocFileName,
-        );
-        if (cloudUrl == null || cloudUrl.isEmpty) {
-          throw Exception('Failed to upload new validation documents');
-        }
-        updatedDocUrl = cloudUrl;
-      }
-
-      // Generate completeAddress string format dynamically
-      final String houseNo = _houseNumController.text.trim();
-      final String sitio = _sitioController.text.trim();
-      final String completeAddressString =
-          "$houseNo, $sitio, $_selectedBarangay, $_selectedCity, $_selectedProvince";
-
-      Map<String, dynamic> updateData = {
-        'phoneNumber': _phoneNumberController.text
-            .trim(), // Dash-formatted sync
-        'completeAddress': completeAddressString,
-        'addressDetails': {
-          'houseNumber': houseNo,
-          'sitioOrSubdivision': sitio,
-          'barangay': _selectedBarangay,
-          'city': _selectedCity,
-          'province': _selectedProvince,
-        },
-      };
-
-      String finalDisplayName = '';
-
-      if (_userRole == 'individual') {
-        finalDisplayName =
-            "${_firstNameController.text.trim()} ${_lastNameController.text.trim()}";
-        updateData['name'] = finalDisplayName;
-        updateData['nameDetails'] = {
-          'firstName': _firstNameController.text.trim(),
-          'middleName': _middleNameController.text.trim(),
-          'lastName': _lastNameController.text.trim(),
-        };
-        updateData['citizenNationalIdUrl'] = updatedDocUrl;
-      } else {
-        finalDisplayName = _orgNameController.text.trim();
-        updateData['name'] = finalDisplayName;
-        updateData['nameDetails'] = {'organizationName': finalDisplayName};
-        updateData['organizationDetails'] = {
-          'contactPerson': _contactPersonController.text.trim(),
-          'businessPermitNumber': _businessPermitController.text.trim(),
-        };
-        updateData['organizationPermitUrl'] = updatedDocUrl;
-      }
-
-      await user.updateDisplayName(finalDisplayName);
-      await _db
-          .collection('users')
-          .doc(user.uid)
-          .set(updateData, SetOptions(merge: true));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Profile updated successfully!")),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to update profile: $e")));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    _loadProfile();
   }
 
   @override
@@ -437,314 +82,412 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _middleNameController.dispose();
     _lastNameController.dispose();
     _orgNameController.dispose();
-    _phoneNumberController.dispose();
-    _houseNumController.dispose();
+    _phoneController.dispose();
+    _houseController.dispose();
     _sitioController.dispose();
     _contactPersonController.dispose();
     _businessPermitController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _isLoading = false;
+        _loadFailed = true;
+      });
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _loadFailed = false;
+    });
+
+    try {
+      final doc = await _db.collection('users').doc(user.uid).get();
+      final data = doc.data() ?? {};
+      _userRole = data['role']?.toString() ?? 'citizen';
+      _accountType = AccountType.fromStoredValue(
+        data['accountType'] ?? data['role'],
+      );
+      _hasOrganizationApplication =
+          (data['organizationId'] as String?)?.isNotEmpty ?? false;
+      _emailAddress = data['email']?.toString() ?? user.email ?? '';
+      _phoneController.text = data['phoneNumber']?.toString() ?? '';
+
+      final nameDetails = data['nameDetails'] as Map<String, dynamic>? ?? {};
+      if (_accountType == AccountType.citizen) {
+        _firstNameController.text = nameDetails['firstName'] ?? '';
+        _middleNameController.text = nameDetails['middleName'] ?? '';
+        _lastNameController.text = nameDetails['lastName'] ?? '';
+        _existingDocUrl = data['citizenNationalIdUrl'];
+      } else if (_accountType == AccountType.organization) {
+        _orgNameController.text =
+            nameDetails['organizationName'] ?? data['name'] ?? '';
+        final org = data['organizationDetails'] as Map<String, dynamic>? ?? {};
+        _contactPersonController.text = org['contactPerson'] ?? '';
+        _businessPermitController.text = org['businessPermitNumber'] ?? '';
+        _existingDocUrl =
+            data['organizationPermitUrl'] ?? data['businessPermitUrl'];
+      }
+
+      final address = data['addressDetails'] as Map<String, dynamic>? ?? {};
+      _houseController.text = address['houseNumber'] ?? '';
+      _sitioController.text = address['sitioOrSubdivision'] ?? '';
+
+      final savedProvince = address['province'] as String?;
+      final savedCity = address['city'] as String?;
+      final savedBarangay = address['barangay'] as String?;
+      if (citiesForProvince(savedProvince).isNotEmpty) {
+        _province = savedProvince;
+        if (citiesForProvince(savedProvince).contains(savedCity)) {
+          _city = savedCity;
+          if (barangaysForCity(savedProvince, savedCity)
+              .contains(savedBarangay)) {
+            _barangay = savedBarangay;
+          }
+        }
+      }
+      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadFailed = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickNewDocument() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    if (file == null || file.bytes == null || !mounted) return;
+    setState(() {
+      _newDocBytes = file.bytes;
+      _newDocFileName = file.name;
+      _dirty = true;
+    });
+  }
+
+  Future<String> _uploadNewDocument(Uint8List bytes, String fileName) {
+    final lower = fileName.toLowerCase();
+    final isImage =
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png');
+    return isImage
+        ? _cloudinary.uploadImage(bytes: bytes, fileName: fileName)
+        : _cloudinary.uploadRawFile(bytes: bytes, fileName: fileName);
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+    if (!_formKey.currentState!.validate()) {
+      showAppSnackBar(
+        context,
+        'Please fix the highlighted fields.',
+        type: AppMessageType.warning,
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      var docUrl = _existingDocUrl;
+      if (_newDocBytes != null && _newDocFileName != null) {
+        docUrl = await _uploadNewDocument(_newDocBytes!, _newDocFileName!);
+      }
+
+      final houseNo = _houseController.text.trim();
+      final sitio = _sitioController.text.trim();
+      final update = <String, dynamic>{
+        if (_accountType != null) 'accountType': _accountType!.name,
+        'phoneNumber': _phoneController.text.trim(),
+        'completeAddress': '$houseNo, $sitio, $_barangay, $_city, $_province',
+        'addressDetails': {
+          'houseNumber': houseNo,
+          'sitioOrSubdivision': sitio,
+          'barangay': _barangay,
+          'city': _city,
+          'province': _province,
+        },
+      };
+
+      String? displayName;
+      if (_accountType == AccountType.citizen) {
+        displayName =
+            '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
+        update['name'] = displayName;
+        update['nameDetails'] = {
+          'firstName': _firstNameController.text.trim(),
+          'middleName': _middleNameController.text.trim(),
+          'lastName': _lastNameController.text.trim(),
+        };
+        update['citizenNationalIdUrl'] = docUrl;
+      } else if (_accountType == AccountType.organization &&
+          !_hasOrganizationApplication) {
+        displayName = _orgNameController.text.trim();
+        update['name'] = displayName;
+        update['nameDetails'] = {'organizationName': displayName};
+        update['organizationDetails'] = {
+          'contactPerson': _contactPersonController.text.trim(),
+          'businessPermitNumber': _businessPermitController.text.trim(),
+        };
+        update['organizationPermitUrl'] = docUrl;
+      }
+
+      if (displayName != null) await user.updateDisplayName(displayName);
+      await _db
+          .collection('users')
+          .doc(user.uid)
+          .set(update, SetOptions(merge: true));
+
+      if (!mounted) return;
+      await context.read<AuthProvider>().reloadUser();
+      if (!mounted) return;
+      _dirty = false;
+      showAppSnackBar(
+        context,
+        'Profile updated.',
+        type: AppMessageType.success,
+      );
+      Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Could not save your profile. Check your connection and try again.',
+          type: AppMessageType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _confirmDiscard() async {
+    final navigator = Navigator.of(context);
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text('Your edits have not been saved.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep editing'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true) navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'Edit Profile',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textDark,
-        elevation: 0,
+    return PopScope(
+      canPop: !_dirty || _isSaving,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmDiscard();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Edit Profile')),
+        body: SafeArea(child: _buildBody()),
       ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              )
-            : Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 20.0,
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) return const SkeletonList(count: 3);
+    if (_loadFailed) {
+      return EmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'Could not load your profile',
+        subtitle: 'Check your connection and try again.',
+        actionLabel: 'Retry',
+        onAction: _loadProfile,
+      );
+    }
+
+    final isCitizen = _accountType == AccountType.citizen;
+    final isOrg = _accountType == AccountType.organization;
+    const gap = SizedBox(height: AppSpacing.lg);
+
+    return Form(
+      key: _formKey,
+      onChanged: () {
+        if (!_dirty) setState(() => _dirty = true);
+      },
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LockedInfoCard(
+                  title: 'Account',
+                  rows: [
+                    (label: 'Email', value: _emailAddress),
+                    (
+                      label: 'Account type',
+                      value: _accountType?.label ?? _userRole.toUpperCase(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Identity'),
+                const SizedBox(height: AppSpacing.sm),
+                if (isCitizen) ...[
+                  CustomTextField(
+                    controller: _firstNameController,
+                    label: 'First name',
+                    prefixIcon: Icons.badge_outlined,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.givenName],
+                    validator: requiredField,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // --- READ-ONLY ACCOUNT IDENTIFIERS ---
-                      AbsorbPointer(
-                        absorbing: true,
-                        child: Opacity(
-                          opacity: 0.6,
-                          child: CustomTextField(
-                            controller: TextEditingController(
-                              text: _emailAddress,
-                            ),
-                            label: 'Email Address',
-                            prefixIcon: Icons.email_outlined,
-                          ),
-                        ),
+                  gap,
+                  CustomTextField(
+                    controller: _middleNameController,
+                    label: 'Middle name (optional)',
+                    prefixIcon: Icons.badge_outlined,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.middleName],
+                  ),
+                  gap,
+                  CustomTextField(
+                    controller: _lastNameController,
+                    label: 'Last name',
+                    prefixIcon: Icons.badge_outlined,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.familyName],
+                    validator: requiredField,
+                  ),
+                  gap,
+                  DocumentReplaceTile(
+                    buttonLabel: _newDocFileName != null
+                        ? 'Choose a different ID'
+                        : 'Replace valid ID',
+                    savedMessage: 'Your ID is saved securely.',
+                    hasExisting: _existingDocUrl != null,
+                    stagedFileName: _newDocFileName,
+                    onPick: _pickNewDocument,
+                  ),
+                ] else if (isOrg && _hasOrganizationApplication)
+                  LockedInfoCard(
+                    title: 'Organization',
+                    rows: [
+                      (
+                        label: 'Legal name',
+                        value: _orgNameController.text,
                       ),
-                      const SizedBox(height: 16),
-                      AbsorbPointer(
-                        absorbing: true,
-                        child: Opacity(
-                          opacity: 0.6,
-                          child: CustomTextField(
-                            controller: TextEditingController(
-                              text: _userRole.toUpperCase(),
-                            ),
-                            label: 'Account Classification Role',
-                            prefixIcon: Icons.gavel_outlined,
-                          ),
-                        ),
+                      (
+                        label: 'Representative',
+                        value: _contactPersonController.text,
                       ),
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 16),
-
-                      // --- CONDITIONAL FIELDS BASED ON ROLE SEGMENTATION ---
-                      if (_userRole == 'individual') ...[
-                        CustomTextField(
-                          controller: _firstNameController,
-                          label: 'First Name',
-                          prefixIcon: Icons.badge_outlined,
-                          validator: (val) =>
-                              val!.trim().isEmpty ? 'Required field' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomTextField(
-                          controller: _middleNameController,
-                          label: 'Middle Name (Optional)',
-                          prefixIcon: Icons.badge_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomTextField(
-                          controller: _lastNameController,
-                          label: 'Last Name',
-                          prefixIcon: Icons.badge_outlined,
-                          validator: (val) =>
-                              val!.trim().isEmpty ? 'Required field' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomButton(
-                          text: _newDocFileName != null
-                              ? 'New Verification ID Staged'
-                              : 'Replace National ID Document',
-                          onPressed: _pickNewDocument,
-                        ),
-                        if (_newDocFileName != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Pending document update: $_newDocFileName',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ] else if (_existingDocUrl != null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            '🔒 Identification document saved securely',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textGrey,
-                            ),
-                          ),
-                        ],
-                      ] else ...[
-                        CustomTextField(
-                          controller: _orgNameController,
-                          label: 'Organization / Business Name',
-                          prefixIcon: Icons.business,
-                          validator: (val) =>
-                              val!.trim().isEmpty ? 'Required field' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomTextField(
-                          controller: _contactPersonController,
-                          label: 'Authorized Contact Person',
-                          prefixIcon: Icons.person_outline,
-                          validator: (val) =>
-                              val!.trim().isEmpty ? 'Required field' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomTextField(
-                          controller: _businessPermitController,
-                          label: 'Business / Mayor\'s Permit Number',
-                          prefixIcon: Icons.gavel_outlined,
-                          validator: (val) =>
-                              val!.trim().isEmpty ? 'Required field' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomButton(
-                          text: _newDocFileName != null
-                              ? 'New Permit Document Staged'
-                              : 'Update Business Permit Documentation',
-                          onPressed: _pickNewDocument,
-                        ),
-                        if (_newDocFileName != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Pending document update: $_newDocFileName',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ] else if (_existingDocUrl != null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            '🔒 Organization validation records saved on server',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textGrey,
-                            ),
-                          ),
-                        ],
-                      ],
-
-                      const SizedBox(height: 16),
-                      CustomTextField(
-                        controller: _phoneNumberController,
-                        label: 'Phone Number (e.g. 0917-123-4567)',
-                        prefixIcon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [_phoneMaskFormatter],
-                        validator: (val) {
-                          if (val == null || val.isEmpty)
-                            return 'Required field';
-                          if (val.length < 13)
-                            return 'Enter complete 11-digit mobile number';
-                          if (!val.startsWith('09'))
-                            return 'Must be a valid PH mobile number starting with 09';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 28),
-
-                      // --- ADDRESS SPECIFICATIONS ---
-                      const Text(
-                        'Address Specifications',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: CustomTextField(
-                              controller: _houseNumController,
-                              label: 'Bldg / House No.',
-                              prefixIcon: Icons.tag,
-                              validator: (val) =>
-                                  val!.trim().isEmpty ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: CustomTextField(
-                              controller: _sitioController,
-                              label: 'Sitio / Street',
-                              prefixIcon: Icons.add_road,
-                              validator: (val) =>
-                                  val!.trim().isEmpty ? 'Required' : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- DROPDOWN LOCATION SELECTORS ---
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedProvince,
-                              decoration: const InputDecoration(
-                                labelText: 'Province',
-                              ),
-                              items: _provinces
-                                  .map(
-                                    (p) => DropdownMenuItem(
-                                      value: p,
-                                      child: Text(p),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedProvince = val;
-                                  _selectedCity = null;
-                                  _selectedBarangay = null;
-                                  _cities = [];
-                                  _barangays = [];
-                                });
-                                if (val != null) _updateCitiesList(val);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedCity,
-                              decoration: const InputDecoration(
-                                labelText: 'City/Municipality',
-                              ),
-                              items: _cities
-                                  .map(
-                                    (c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(c),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedCity = val;
-                                  _selectedBarangay = null;
-                                  _barangays = [];
-                                });
-                                if (val != null && _selectedProvince != null) {
-                                  _updateBarangaysList(_selectedProvince!, val);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      DropdownButtonFormField<String>(
-                        value: _selectedBarangay,
-                        decoration: const InputDecoration(
-                          labelText: 'Barangay',
-                        ),
-                        items: _barangays
-                            .map(
-                              (b) => DropdownMenuItem(value: b, child: Text(b)),
-                            )
-                            .toList(),
-                        onChanged: (val) =>
-                            setState(() => _selectedBarangay = val),
-                      ),
-                      const SizedBox(height: 36),
-
-                      CustomButton(
-                        text: 'Save Details',
-                        onPressed: _handleSaveChanges,
+                      (
+                        label: 'Permit no.',
+                        value: _businessPermitController.text,
                       ),
                     ],
+                    footnote: _existingDocUrl != null
+                        ? 'Permit submitted for organization review'
+                        : null,
+                  )
+                else if (isOrg) ...[
+                  CustomTextField(
+                    controller: _orgNameController,
+                    label: 'Organization / business name',
+                    prefixIcon: Icons.business,
+                    textInputAction: TextInputAction.next,
+                    validator: requiredField,
                   ),
+                  gap,
+                  CustomTextField(
+                    controller: _contactPersonController,
+                    label: 'Authorized contact person',
+                    prefixIcon: Icons.person_outline,
+                    textInputAction: TextInputAction.next,
+                    validator: requiredField,
+                  ),
+                  gap,
+                  CustomTextField(
+                    controller: _businessPermitController,
+                    label: "Business / Mayor's permit number",
+                    prefixIcon: Icons.gavel_outlined,
+                    textInputAction: TextInputAction.next,
+                    validator: requiredField,
+                  ),
+                  gap,
+                  DocumentReplaceTile(
+                    buttonLabel: _newDocFileName != null
+                        ? 'Choose a different permit'
+                        : 'Update business permit',
+                    savedMessage: 'Your permit is saved on the server.',
+                    hasExisting: _existingDocUrl != null,
+                    stagedFileName: _newDocFileName,
+                    onPick: _pickNewDocument,
+                  ),
+                ],
+                gap,
+                CustomTextField(
+                  controller: _phoneController,
+                  label: 'Phone number (e.g. 0917-123-4567)',
+                  prefixIcon: Icons.phone_outlined,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  inputFormatters: [_phoneMask],
+                  validator: phoneValidator,
                 ),
-              ),
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Address'),
+                const SizedBox(height: AppSpacing.sm),
+                AddressFields(
+                  houseController: _houseController,
+                  sitioController: _sitioController,
+                  province: _province,
+                  city: _city,
+                  barangay: _barangay,
+                  onProvinceChanged: (v) => setState(() {
+                    _province = v;
+                    _city = null;
+                    _barangay = null;
+                  }),
+                  onCityChanged: (v) => setState(() {
+                    _city = v;
+                    _barangay = null;
+                  }),
+                  onBarangayChanged: (v) => setState(() => _barangay = v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                CustomButton(
+                  text: 'Save changes',
+                  icon: Icons.save_outlined,
+                  isLoading: _isSaving,
+                  onPressed: _isSaving ? null : _save,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

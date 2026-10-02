@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/constants/app_colors.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -7,6 +6,7 @@ class EmptyState extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onAction;
   final String? actionLabel;
+  final IconData actionIcon;
 
   const EmptyState({
     super.key,
@@ -15,6 +15,7 @@ class EmptyState extends StatelessWidget {
     this.subtitle,
     this.onAction,
     this.actionLabel,
+    this.actionIcon = Icons.add,
   });
 
   @override
@@ -25,7 +26,9 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 72, color: Colors.grey[400]),
+            ExcludeSemantics(
+              child: Icon(icon, size: 72, color: Colors.grey[400]),
+            ),
             const SizedBox(height: 16),
             Text(
               title,
@@ -48,12 +51,8 @@ class EmptyState extends StatelessWidget {
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.add),
+                icon: Icon(actionIcon),
                 label: Text(actionLabel!),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
               ),
             ],
           ],

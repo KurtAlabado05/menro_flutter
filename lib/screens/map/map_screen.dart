@@ -1,16 +1,16 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../report/report_details_screen.dart';
+import '../../models/project_model.dart';
+import '../../models/report_model.dart';
 import '../project/project_details_screen.dart';
-import '../../providers/report_provider.dart';
-import '../../providers/project_provider.dart';
+import '../report/report_details_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -67,28 +67,33 @@ class _MapScreenState extends State<MapScreen> {
 
   List<_MapPin> _pins = [];
   bool _isLoadingPins = false;
+  int _recordsWithoutCoordinates = 0;
+  String? _pinLoadError;
   List<LatLng> _baliwagPolygon =
       []; // 🟢 ADDED: Stores high-precision vector nodes
 
   Future<void> _loadPinsFromFirestore() async {
-    if (_isLoadingPins || !_pins.isEmpty) return;
+    if (_isLoadingPins) return;
     setState(() => _isLoadingPins = true);
+    setState(() => _pinLoadError = null);
 
     try {
-      final reportProvider = context.read<ReportProvider>();
-      final projectProvider = context.read<ProjectProvider>();
-
-      await Future.wait([
-        reportProvider.loadReports(),
-        projectProvider.loadProjects(),
+      final snapshots = await Future.wait([
+        FirebaseFirestore.instance.collection('reports').get(),
+        FirebaseFirestore.instance.collection('projects').get(),
       ]);
 
       final pins = <_MapPin>[];
+      var recordsWithoutCoordinates = 0;
 
-      for (final r in reportProvider.reports) {
+      for (final doc in snapshots[0].docs) {
+        final r = ReportModel.fromFirestore(doc.data(), doc.id);
         final lat = r.latitude;
         final lng = r.longitude;
-        if (lat == null || lng == null) continue;
+        if (lat == null || lng == null) {
+          recordsWithoutCoordinates++;
+          continue;
+        }
 
         pins.add(
           _MapPin(
@@ -104,10 +109,14 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
 
-      for (final p in projectProvider.projects) {
+      for (final doc in snapshots[1].docs) {
+        final p = ProjectModel.fromFirestore(doc.data(), doc.id);
         final lat = p.latitude;
         final lng = p.longitude;
-        if (lat == null || lng == null) continue;
+        if (lat == null || lng == null) {
+          recordsWithoutCoordinates++;
+          continue;
+        }
 
         pins.add(
           _MapPin(
@@ -127,10 +136,14 @@ class _MapScreenState extends State<MapScreen> {
 
       setState(() {
         _pins = pins;
+        _recordsWithoutCoordinates = recordsWithoutCoordinates;
         _selectedPin = null;
       });
     } catch (e) {
       debugPrint('MapScreen load pins error: $e');
+      if (mounted) {
+        setState(() => _pinLoadError = 'Could not load map records.');
+      }
     } finally {
       if (mounted) setState(() => _isLoadingPins = false);
     }
@@ -353,75 +366,157 @@ class _MapScreenState extends State<MapScreen> {
             ),
 
             SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.arrow_back),
+                              tooltip: 'Back',
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Baliwag environmental map',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: AppColors.textDark,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _pinLoadError ??
+                                        (_isLoadingPins
+                                            ? 'Loading reports and projects...'
+                                            : '${_pins.length} mapped records'),
+                                    style: const TextStyle(
+                                      color: AppColors.textGrey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _FilterChip(
+                                label: 'All',
+                                isSelected: _activeFilter == 'All',
+                                onTap: () =>
+                                    setState(() => _activeFilter = 'All'),
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _FilterChip(
+                                label:
+                                    'Reports (${_pins.where((pin) => pin.type == 'report').length})',
+                                isSelected: _activeFilter == 'Reports',
+                                onTap: () =>
+                                    setState(() => _activeFilter = 'Reports'),
+                                color: AppColors.statusPending,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _FilterChip(
+                                label:
+                                    'Projects (${_pins.where((pin) => pin.type == 'project').length})',
+                                isSelected: _activeFilter == 'Projects',
+                                onTap: () =>
+                                    setState(() => _activeFilter = 'Projects'),
+                                color: AppColors.statusVerified,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_recordsWithoutCoordinates > 0) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: AppColors.textGrey,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '$_recordsWithoutCoordinates records cannot be mapped because coordinates are missing.',
+                                  style: const TextStyle(
+                                    color: AppColors.textGrey,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                      child: IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _FilterChip(
-                              label: 'All',
-                              isSelected: _activeFilter == 'All',
-                              onTap: () =>
-                                  setState(() => _activeFilter = 'All'),
-                              color: AppColors.primary,
-                            ),
-                            _FilterChip(
-                              label: 'Reports',
-                              isSelected: _activeFilter == 'Reports',
-                              onTap: () =>
-                                  setState(() => _activeFilter = 'Reports'),
-                              color: AppColors.statusPending,
-                            ),
-                            _FilterChip(
-                              label: 'Projects',
-                              isSelected: _activeFilter == 'Projects',
-                              onTap: () =>
-                                  setState(() => _activeFilter = 'Projects'),
-                              color: AppColors.statusVerified,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+              ),
+            ),
+
+            Positioned(
+              top: 205,
+              right: 16,
+              child: Column(
+                children: [
+                  _MapControlButton(
+                    icon: Icons.add,
+                    tooltip: 'Zoom in',
+                    onTap: () => _mapController.move(
+                      _mapController.center,
+                      (_mapController.zoom + 1).clamp(11, 17),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _MapControlButton(
+                    icon: Icons.remove,
+                    tooltip: 'Zoom out',
+                    onTap: () => _mapController.move(
+                      _mapController.center,
+                      (_mapController.zoom - 1).clamp(11, 17),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -492,23 +587,105 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? color : Colors.grey[600],
+    return Material(
+      color: isSelected ? color.withValues(alpha: 0.12) : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 38),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isSelected
+                  ? color.withValues(alpha: 0.35)
+                  : Colors.transparent,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? color : AppColors.textGrey,
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _MapControlButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 3,
+      child: IconButton(
+        onPressed: onTap,
+        tooltip: tooltip,
+        icon: Icon(icon, color: AppColors.textDark),
+      ),
+    );
+  }
+}
+
+class _MapLegend extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: const Row(
+        children: [
+          _LegendDot(color: AppColors.statusPending, label: 'Reports'),
+          SizedBox(width: 10),
+          _LegendDot(color: AppColors.statusVerified, label: 'Projects'),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.location_on, size: 15, color: color),
+        const SizedBox(width: 3),
+        Text(label, style: const TextStyle(fontSize: 11)),
+      ],
     );
   }
 }

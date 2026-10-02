@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/constants/user_roles.dart';
+import 'account_type.dart';
 
 class UserModel {
   final String id;
   final String name;
   final String email;
   final String role;
+  final AccountType? accountType;
 
   final String? avatarUrl;
   final String? contactPerson;
@@ -12,6 +15,13 @@ class UserModel {
   final bool? isVerified;
   final String? phoneNumber;
   final String? completeAddress;
+  final String? organizationId;
+  final String? organizationStatus;
+  final String? organizationMembershipStatus;
+  final String? organizationRequestStatus;
+  final String? organizationRequestName;
+  final String? activeOrganizationName;
+  final List<Map<String, dynamic>> organizationMemberships;
 
   // --- NEW VERIFICATION FIELDS ---
   final String? citizenNationalIdUrl;
@@ -29,12 +39,20 @@ class UserModel {
     required this.name,
     required this.email,
     required this.role,
+    AccountType? accountType,
     this.avatarUrl,
     this.contactPerson,
     this.businessPermitNumber,
     this.isVerified,
     this.phoneNumber,
     this.completeAddress,
+    this.organizationId,
+    this.organizationStatus,
+    this.organizationMembershipStatus,
+    this.organizationRequestStatus,
+    this.organizationRequestName,
+    this.activeOrganizationName,
+    this.organizationMemberships = const [],
     this.citizenNationalIdUrl,
     this.businessPermitUrl,
     this.isProfilePublic = true,
@@ -42,10 +60,50 @@ class UserModel {
     this.impactScore = 0,
     this.badges = const [],
     required this.joinedAt,
-  });
+  }) : accountType = accountType ?? AccountType.fromStoredValue(role);
+  bool get isStaff => UserRoles.isStaff(role);
+
+  bool get isInspectionOfficer => role == UserRoles.inspectionOfficer;
+  bool get hasApprovedOrganizationAccess {
+    if (organizationId != null) {
+      for (final membership in organizationMemberships) {
+        if (membership['organizationId'] == organizationId) {
+          return membership['organizationStatus'] == 'verified' &&
+              membership['status'] == 'approved';
+        }
+      }
+      return organizationStatus == 'verified' &&
+          organizationMembershipStatus == 'approved';
+    }
+
+    return (organizationStatus == 'verified' &&
+            organizationMembershipStatus == 'approved') ||
+        (organizationMemberships.length == 1 &&
+            organizationMemberships.single['organizationStatus'] ==
+                'verified' &&
+            organizationMemberships.single['status'] == 'approved');
+  }
+
+  String get contextualName {
+    if (hasApprovedOrganizationAccess &&
+        activeOrganizationName != null &&
+        activeOrganizationName!.trim().isNotEmpty) {
+      return activeOrganizationName!.trim();
+    }
+    if (accountType == AccountType.organization &&
+        !hasApprovedOrganizationAccess &&
+        contactPerson != null &&
+        contactPerson!.trim().isNotEmpty) {
+      return contactPerson!.trim();
+    }
+    return name;
+  }
 
   factory UserModel.fromFirestore(Map<String, dynamic> json, String docId) {
-    final role = (json['role'] ?? 'individual').toString();
+    final role = (json['role'] ?? json['accountType'] ?? 'citizen').toString();
+    final accountType = AccountType.fromStoredValue(
+      json['accountType'] ?? role,
+    );
     final orgDetails = json['organizationDetails'];
 
     final contactPerson =
@@ -87,33 +145,77 @@ class UserModel {
       completeAddress = parts.isNotEmpty ? parts.join(', ') : null;
     }
 
-    String parsedName = 'User';
-    if (json['nameDetails'] is Map<String, dynamic>) {
-      final first = (json['nameDetails']['firstName'] as String?)?.trim() ?? '';
-      final last = (json['nameDetails']['lastName'] as String?)?.trim() ?? '';
-      final full = '$first $last'.trim();
-      if (full.isNotEmpty) parsedName = full;
-    } else if (json['fullName'] != null &&
-        json['fullName'].toString().trim().isNotEmpty) {
-      parsedName = json['fullName'].toString().replaceAll('"', '').trim();
-    } else if (json['name'] != null &&
-        json['name'].toString().trim().isNotEmpty) {
-      parsedName = json['name'].toString().trim();
+    String parsedName = '';
+    final nameDetails = json['nameDetails'];
+    if (nameDetails is Map) {
+      final organizationName =
+          (nameDetails['organizationName'] ?? json['organizationName'])
+              ?.toString()
+              .trim() ??
+          '';
+      if (organizationName.isNotEmpty) {
+        parsedName = organizationName;
+      } else {
+        parsedName =
+            [
+                  nameDetails['firstName'],
+                  nameDetails['middleName'],
+                  nameDetails['lastName'],
+                ]
+                .where(
+                  (part) => part != null && part.toString().trim().isNotEmpty,
+                )
+                .map((part) => part.toString().trim())
+                .join(' ');
+      }
     }
+    if (parsedName.isEmpty) {
+      for (final value in [
+        json['organizationName'],
+        json['fullName'],
+        json['name'],
+      ]) {
+        final candidate = value?.toString().replaceAll('"', '').trim() ?? '';
+        if (candidate.isNotEmpty) {
+          parsedName = candidate;
+          break;
+        }
+      }
+    }
+    if (parsedName.isEmpty) parsedName = 'User';
 
     return UserModel(
       id: docId,
       name: parsedName,
       email: json['email'] ?? '',
       role: role,
+      accountType: accountType,
       avatarUrl: json['avatarUrl'],
       contactPerson: contactPerson,
       businessPermitNumber: businessPermitNumber,
       isVerified: isVerified,
       phoneNumber: json['phoneNumber'],
       completeAddress: completeAddress,
+      organizationId: json['organizationId'] as String?,
+      organizationStatus: json['organizationStatus'] as String?,
+      organizationMembershipStatus:
+          json['organizationMembershipStatus'] as String?,
+      organizationRequestStatus: json['organizationRequestStatus'] as String?,
+      organizationRequestName: json['organizationRequestName'] as String?,
+      activeOrganizationName: json['activeOrganizationName'] as String?,
+      organizationMemberships: _parseOrganizationMemberships(
+        json['organizationMemberships'],
+      ),
       citizenNationalIdUrl: json['citizenNationalIdUrl'] as String?,
-      businessPermitUrl: json['businessPermitUrl'] as String?,
+      businessPermitUrl:
+          json['organizationPermitUrl'] as String? ??
+          json['businessPermitUrl'] as String?,
+      isProfilePublic: json['isProfilePublic'] is bool
+          ? json['isProfilePublic'] as bool
+          : true,
+      allowNotifications: json['allowNotifications'] is bool
+          ? json['allowNotifications'] as bool
+          : true,
       impactScore: json['impactScore'] ?? 0,
       badges: List<String>.from(json['badges'] ?? []),
       joinedAt: json['joinedAt'] is Timestamp
@@ -129,13 +231,32 @@ class UserModel {
       id: json['id'] ?? '',
       name: json['name'] ?? 'User',
       email: json['email'] ?? '',
-      role: json['role'] ?? 'individual',
+      role: json['role'] ?? json['accountType'] ?? 'citizen',
+      accountType: AccountType.fromStoredValue(
+        json['accountType'] ?? json['role'],
+      ),
       avatarUrl: json['avatarUrl'],
       contactPerson: json['contactPerson'],
       phoneNumber: json['phoneNumber'],
       completeAddress: json['completeAddress'],
+      organizationId: json['organizationId'],
+      organizationStatus: json['organizationStatus'],
+      organizationMembershipStatus: json['organizationMembershipStatus'],
+      organizationRequestStatus: json['organizationRequestStatus'],
+      organizationRequestName: json['organizationRequestName'],
+      activeOrganizationName: json['activeOrganizationName'],
+      organizationMemberships: _parseOrganizationMemberships(
+        json['organizationMemberships'],
+      ),
       citizenNationalIdUrl: json['citizenNationalIdUrl'],
-      businessPermitUrl: json['businessPermitUrl'],
+      businessPermitUrl:
+          json['organizationPermitUrl'] ?? json['businessPermitUrl'],
+      isProfilePublic: json['isProfilePublic'] is bool
+          ? json['isProfilePublic']
+          : true,
+      allowNotifications: json['allowNotifications'] is bool
+          ? json['allowNotifications']
+          : true,
       impactScore: json['impactScore'] ?? 0,
       badges: List<String>.from(json['badges'] ?? []),
       joinedAt: json['joinedAt'] != null
@@ -149,12 +270,23 @@ class UserModel {
     'name': name,
     'email': email,
     'role': role,
+    if (accountType != null) 'accountType': accountType!.name,
     'avatarUrl': avatarUrl,
     'contactPerson': contactPerson,
     'phoneNumber': phoneNumber,
     'completeAddress': completeAddress,
+    'organizationId': organizationId,
+    'organizationStatus': organizationStatus,
+    'organizationMembershipStatus': organizationMembershipStatus,
+    'organizationRequestStatus': organizationRequestStatus,
+    'organizationRequestName': organizationRequestName,
+    'activeOrganizationName': activeOrganizationName,
+    'organizationMemberships': organizationMemberships,
     'citizenNationalIdUrl': citizenNationalIdUrl,
     'businessPermitUrl': businessPermitUrl,
+    'organizationPermitUrl': businessPermitUrl,
+    'isProfilePublic': isProfilePublic,
+    'allowNotifications': allowNotifications,
     'impactScore': impactScore,
     'badges': badges,
     'joinedAt': joinedAt.toIso8601String(),
@@ -164,14 +296,35 @@ class UserModel {
     'name': name,
     'email': email,
     'role': role,
+    if (accountType != null) 'accountType': accountType!.name,
     'avatarUrl': avatarUrl,
     'contactPerson': contactPerson,
     'phoneNumber': phoneNumber,
     'completeAddress': completeAddress,
+    'organizationId': organizationId,
+    'organizationStatus': organizationStatus,
+    'organizationMembershipStatus': organizationMembershipStatus,
+    'organizationRequestStatus': organizationRequestStatus,
+    'organizationRequestName': organizationRequestName,
+    'activeOrganizationName': activeOrganizationName,
+    'organizationMemberships': organizationMemberships,
     'citizenNationalIdUrl': citizenNationalIdUrl,
     'businessPermitUrl': businessPermitUrl,
+    'organizationPermitUrl': businessPermitUrl,
+    'isProfilePublic': isProfilePublic,
+    'allowNotifications': allowNotifications,
     'impactScore': impactScore,
     'badges': badges,
     'joinedAt': FieldValue.serverTimestamp(),
   };
+
+  static List<Map<String, dynamic>> _parseOrganizationMemberships(
+    Object? value,
+  ) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
 }

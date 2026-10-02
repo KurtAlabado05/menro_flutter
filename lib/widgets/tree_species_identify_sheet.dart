@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -105,6 +106,57 @@ class _TreeSpeciesIdentifySheetState extends State<TreeSpeciesIdentifySheet> {
         _trunkUrl = null;
       }
     });
+  }
+
+  Future<void> _choosePhotoInput({required bool isLeaf}) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(sheetContext, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open_outlined),
+              title: const Text('Choose Image File'),
+              onTap: () => Navigator.pop(sheetContext, 'file'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == 'gallery') {
+      await _pickImageFromGallery(isLeaf: isLeaf);
+      return;
+    }
+    if (choice != 'file') return;
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      final bytes = result?.files.singleOrNull?.bytes;
+      if (bytes == null || !mounted) return;
+      setState(() {
+        _errorMessage = null;
+        _result = null;
+        if (isLeaf) {
+          _leafBytes = bytes;
+          _leafUrl = null;
+        } else {
+          _trunkBytes = bytes;
+          _trunkUrl = null;
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Could not load image file: $e');
+    }
   }
 
   Future<void> _uploadEvidence() async {
@@ -257,7 +309,7 @@ class _TreeSpeciesIdentifySheetState extends State<TreeSpeciesIdentifySheet> {
                 icon: Icons.eco_outlined,
                 previewBytes: _leafBytes,
                 onCapture: () => _capturePhoto(isLeaf: true),
-                onUpload: () => _pickImageFromGallery(isLeaf: true),
+                onUpload: () => _choosePhotoInput(isLeaf: true),
                 onClear: () => setState(() {
                   _leafBytes = null;
                   _leafUrl = null;
@@ -270,7 +322,7 @@ class _TreeSpeciesIdentifySheetState extends State<TreeSpeciesIdentifySheet> {
                 icon: Icons.park_outlined,
                 previewBytes: _trunkBytes,
                 onCapture: () => _capturePhoto(isLeaf: false),
-                onUpload: () => _pickImageFromGallery(isLeaf: false),
+                onUpload: () => _choosePhotoInput(isLeaf: false),
                 onClear: () => setState(() {
                   _trunkBytes = null;
                   _trunkUrl = null;

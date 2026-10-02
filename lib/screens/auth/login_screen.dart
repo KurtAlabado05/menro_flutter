@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../providers/auth_provider.dart' as app_auth_provider;
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/custom_button.dart';
+import '../../services/onboarding_prefs_service.dart';
 import 'register_screen.dart';
-import '../main/main_screen.dart';
+import 'role_home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,20 +18,32 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isSendingReset = false;
 
-  Future<void> _handleLogin(BuildContext ctx) async {
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Enter your email address';
+    if (!_emailPattern.hasMatch(email)) return 'Enter a valid email address';
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return 'Enter your password';
+    return null;
+  }
+
+  Future<void> _handleLogin() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+
     final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(content: Text('Please enter both email and password.')),
-      );
-      return;
-    }
+    final String password = _passwordController.text;
 
     setState(() => _isLoading = true);
 
@@ -35,54 +51,106 @@ class _LoginScreenState extends State<LoginScreen> {
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
-      if (userCredential.user != null && !userCredential.user!.emailVerified) {
+      // Load the Firestore profile first so the email-verification gate
+      // below can be skipped for staff accounts (admin-created accounts
+      // are trusted immediately, matching the web admin's login behavior).
+      if (!mounted) return;
+      final authProvider = context.read<app_auth_provider.AuthProvider>();
+      await authProvider.reloadUser();
+      final loadedUser = authProvider.user;
+      final isStaff = loadedUser?.isStaff ?? false;
+
+      if (!isStaff &&
+          userCredential.user != null &&
+          !userCredential.user!.emailVerified) {
         await userCredential.user!.sendEmailVerification();
-        await FirebaseAuth.instance.signOut();
+        await authProvider.logout();
         if (mounted) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Email not verified. A new link has been sent to your inbox.',
-              ),
-              backgroundColor: Colors.orange,
-            ),
+          showAppSnackBar(
+            context,
+            'Email not verified. A new link has been sent to your inbox.',
+            type: AppMessageType.warning,
           );
         }
         return;
       }
 
+      await const OnboardingPrefsService().markLoggedIn();
+
       if (mounted) {
         Navigator.pushReplacement(
-          ctx,
-          MaterialPageRoute(builder: (_) => const MainScreen()),
+          context,
+          MaterialPageRoute(builder: (_) => homeForUser(loadedUser)),
         );
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage = "An error occurred. Please try again.";
-      if (e.code == 'user-not-found') {
-        errorMessage = "No account found for this email.";
-      } else if (e.code == 'wrong-password') {
-        errorMessage = "Incorrect password.";
-      } else if (e.code == 'user-disabled') {
-        errorMessage = "This account has been disabled.";
-      } else if (e.code == 'invalid-email') {
-        errorMessage = "The email address is badly formatted.";
-      } else if (e.code == 'too-many-requests') {
-        errorMessage = "Too many failed attempts. Please try again later.";
-      }
+      debugPrint('Login failed: ${e.code} - ${e.message}');
+      final String errorMessage = switch (e.code) {
+        'user-not-found' => "No account found for this email.",
+        'wrong-password' ||
+        'invalid-credential' => "Incorrect email or password.",
+        'user-disabled' => "This account has been disabled.",
+        'invalid-email' => "The email address is badly formatted.",
+        'too-many-requests' =>
+          "Too many failed attempts. Please try again later.",
+        'operation-not-allowed' =>
+          "Email/password login is not enabled in Firebase.",
+        'network-request-failed' =>
+          "Network error. Check your internet connection and try again.",
+        _ => "Login failed (${e.code}). Please try again.",
+      };
       if (mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, errorMessage, type: AppMessageType.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          ctx,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        showAppSnackBar(
+          context,
+          'Something went wrong. Please try again.',
+          type: AppMessageType.error,
+        );
       }
+      debugPrint('Login error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final emailError = _validateEmail(_emailController.text);
+    if (emailError != null) {
+      showAppSnackBar(
+        context,
+        'Enter a valid email above first, then tap Forgot Password.',
+        type: AppMessageType.warning,
+      );
+      return;
+    }
+
+    setState(() => _isSendingReset = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim(),
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'If an account exists for that email, a reset link has been sent.',
+          type: AppMessageType.success,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e.code == 'network-request-failed'
+              ? 'Network error. Check your internet connection and try again.'
+              : 'Could not send the reset link. Please try again.',
+          type: AppMessageType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingReset = false);
     }
   }
 
@@ -97,122 +165,130 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Builder(
-        builder: (ctx) => SafeArea(
-          child: Center(
-            child: _isLoading
-                ? const CircularProgressIndicator(color: AppColors.primary)
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Image.asset(
-                          'assets/images/ui/baliwag_seal.png',
-                          height: 80,
-                          width: 80,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'EcoMap',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'In partnership with MENRO & DENR-CENRO Baliwag',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 48),
-                        CustomTextField(
-                          controller: _emailController,
-                          label: 'Email Address',
-                          prefixIcon: Icons.email_outlined,
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                        const SizedBox(height: 16),
-                        CustomTextField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          prefixIcon: Icons.lock_outline,
-                          isPassword: true,
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {
-                              if (_emailController.text.isNotEmpty) {
-                                FirebaseAuth.instance.sendPasswordResetEmail(
-                                  email: _emailController.text.trim(),
-                                );
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Password reset link sent to your email.',
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Enter your email first to reset password.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(color: AppColors.primary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        CustomButton(
-                          text: 'Login',
-                          onPressed: () => _handleLogin(ctx),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              "Don't have an account? ",
-                              style: TextStyle(color: AppColors.textGrey),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  ctx,
-                                  MaterialPageRoute(
-                                    builder: (_) => const RegisterScreen(),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'Register',
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/ui/baliwag_seal.png',
+                            height: 80,
+                            width: 80,
+                            fit: BoxFit.contain,
+                            semanticLabel: 'Baliwag city seal',
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'EcoMap',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'In partnership with MENRO & DENR-CENRO Baliwag',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 40),
+                      CustomTextField(
+                        controller: _emailController,
+                        label: 'Email Address',
+                        prefixIcon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.email],
+                        enabled: !_isLoading,
+                        validator: _validateEmail,
+                      ),
+                      const SizedBox(height: 16),
+                      CustomTextField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        prefixIcon: Icons.lock_outline,
+                        isPassword: true,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        enabled: !_isLoading,
+                        validator: _validatePassword,
+                        onFieldSubmitted: (_) => _handleLogin(),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: (_isLoading || _isSendingReset)
+                              ? null
+                              : _handleForgotPassword,
+                          child: _isSendingReset
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Forgot Password?'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      CustomButton(
+                        text: 'Login',
+                        isLoading: _isLoading,
+                        onPressed: _handleLogin,
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          const Text(
+                            "Don't have an account?",
+                            style: TextStyle(color: AppColors.textGrey),
+                          ),
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const RegisterScreen(),
+                                    ),
+                                  ),
+                            child: const Text(
+                              'Register',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
