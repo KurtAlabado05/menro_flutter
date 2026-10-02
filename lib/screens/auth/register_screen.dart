@@ -166,10 +166,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        CustomButton(
-          text: fileName == null ? buttonLabel : 'Replace document',
-          icon: fileName == null ? Icons.upload_file_outlined : Icons.refresh,
-          onPressed: onPick,
+        Semantics(
+          label: fileName == null ? buttonLabel : 'Replace document',
+          button: true,
+          enabled: true,
+          onTap: onPick,
+          child: CustomButton(
+            text: fileName == null ? buttonLabel : 'Replace document',
+            icon: fileName == null ? Icons.upload_file_outlined : Icons.refresh,
+            onPressed: onPick,
+          ),
         ),
         const SizedBox(height: 8),
         const Text(
@@ -178,23 +184,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         if (fileName != null) ...[
           const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.attach_file, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  fileName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          Semantics(
+            label: 'Selected file: $fileName',
+            container: true,
+            child: Row(
+              children: [
+                const Icon(Icons.attach_file, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Remove document',
-                onPressed: onRemove,
-                icon: const Icon(Icons.close),
-              ),
-            ],
+                Semantics(
+                  label: 'Remove document',
+                  button: true,
+                  enabled: true,
+                  onTap: onRemove,
+                  child: IconButton(
+                    tooltip: 'Remove document',
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ],
@@ -203,23 +219,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   List<Widget> _buildAccountDetailsStep() {
     return [
-      SegmentedButton<AccountType>(
-        segments: const [
-          ButtonSegment<AccountType>(
-            value: AccountType.citizen,
-            label: Text('Citizen'),
-            icon: Icon(Icons.person_outline),
-          ),
-          ButtonSegment<AccountType>(
-            value: AccountType.organization,
-            label: Text('Organization'),
-            icon: Icon(Icons.business_outlined),
-          ),
-        ],
-        selected: {_selectedAccountType},
-        onSelectionChanged: (selection) {
-          setState(() => _selectedAccountType = selection.first);
-        },
+      Semantics(
+        label: 'Account type selection',
+        container: true,
+        child: SegmentedButton<AccountType>(
+          segments: [
+            ButtonSegment<AccountType>(
+              value: AccountType.citizen,
+              label: const Text('Citizen'),
+              icon: const Icon(Icons.person_outline),
+            ),
+            ButtonSegment<AccountType>(
+              value: AccountType.organization,
+              label: const Text('Organization'),
+              icon: const Icon(Icons.business_outlined),
+            ),
+          ],
+          selected: {_selectedAccountType},
+          onSelectionChanged: (selection) {
+            setState(() => _selectedAccountType = selection.first);
+          },
+        ),
       ),
       const SizedBox(height: 12),
       Text(
