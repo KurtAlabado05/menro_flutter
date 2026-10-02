@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_tokens.dart';
+import '../../models/inspection_application_model.dart';
 import '../../providers/inspection_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/skeleton_loader.dart';
@@ -30,14 +31,14 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
     super.dispose();
   }
 
-  List<dynamic> _filterAndSortQueue(List<dynamic> queue) {
+  List<InspectionApplicationModel> _filterAndSortQueue(List<InspectionApplicationModel> queue) {
     var filtered = queue;
 
     // Apply type filter
     if (_filterType == 'reports') {
-      filtered = filtered.where((dynamic a) => a.sourceCollection == 'reports').toList();
+      filtered = filtered.where((a) => a.sourceCollection == 'reports').toList();
     } else if (_filterType == 'permits') {
-      filtered = filtered.where((dynamic a) => a.sourceCollection != 'reports').toList();
+      filtered = filtered.where((a) => a.sourceCollection != 'reports').toList();
     }
 
     // Apply search
@@ -45,7 +46,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
       final q = _searchQuery.toLowerCase();
       filtered = filtered
           .where(
-            (dynamic a) =>
+            (a) =>
                 a.applicantName.toLowerCase().contains(q) ||
                 a.category.toLowerCase().contains(q) ||
                 a.applicationAddress.toLowerCase().contains(q) ||
@@ -62,7 +63,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
         'normal': 2,
         'low': 3,
       };
-      filtered.sort((dynamic a, dynamic b) {
+      filtered.sort((a, b) {
         final aPriority =
             priorityOrder[a.raw['priority']?.toString().toLowerCase()] ?? 2;
         final bPriority =
@@ -74,7 +75,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
       });
     } else {
       filtered.sort(
-        (dynamic a, dynamic b) => (b.submittedAt ?? DateTime(2000))
+        (a, b) => (b.submittedAt ?? DateTime(2000))
             .compareTo(a.submittedAt ?? DateTime(2000)),
       );
     }
@@ -103,7 +104,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
     final filteredQueue = _filterAndSortQueue(provider.queue);
     final allCount = provider.queue.length;
     final reportCount = provider.queue
-        .where((dynamic a) => a.sourceCollection == 'reports')
+        .where((a) => a.sourceCollection == 'reports')
         .length;
     final permitCount = allCount - reportCount;
 
