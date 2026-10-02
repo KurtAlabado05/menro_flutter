@@ -194,8 +194,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           child: Image.asset(
                             'assets/images/ui/baliwag_seal.png',
-                            height: 80,
-                            width: 80,
+                            height: 120,
+                            width: 120,
                             fit: BoxFit.contain,
                             semanticLabel: 'Baliwag city seal',
                           ),
