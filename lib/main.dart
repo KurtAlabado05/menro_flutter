@@ -13,7 +13,6 @@ import 'firebase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await FirebaseService.initialize(); // 🔥 THIS IS REQUIRED
-  print("🔥 Firebase initialized successfully"); // TEST LINE
 
   runApp(const CenroApp());
 }

@@ -1,0 +1,22 @@
+{
+  "modelPicker": {
+    "options": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Sonnet 5 – Architecture",
+        "description": "Complex architecture, design decisions, multi-file refactors"
+      },
+      {
+        "model": "claude-haiku-4-5-20251001",
+        "label": "Haiku 4.5 – Implementation",
+        "description": "Straightforward implementations, debugging, small fixes"
+      },
+      {
+        "model": "claude-opus-5-5",
+        "label": "Opus 5.5 – Research",
+        "description": "Heavy research, cross-project analysis, complex investigations"
+      }
+    ],
+    "replaceBuiltInOptions": false
+  }
+}
