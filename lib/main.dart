@@ -38,6 +38,8 @@ class CenroApp extends StatelessWidget {
         title: 'EcoMap',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
         home: const AppEntryGate(),
       ),
     );
