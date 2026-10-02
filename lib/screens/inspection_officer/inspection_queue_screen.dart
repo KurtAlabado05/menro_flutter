@@ -35,9 +35,9 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
 
     // Apply type filter
     if (_filterType == 'reports') {
-      filtered = filtered.where((a) => a.sourceCollection == 'reports').toList();
+      filtered = filtered.where((dynamic a) => a.sourceCollection == 'reports').toList();
     } else if (_filterType == 'permits') {
-      filtered = filtered.where((a) => a.sourceCollection != 'reports').toList();
+      filtered = filtered.where((dynamic a) => a.sourceCollection != 'reports').toList();
     }
 
     // Apply search
@@ -45,7 +45,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
       final q = _searchQuery.toLowerCase();
       filtered = filtered
           .where(
-            (a) =>
+            (dynamic a) =>
                 a.applicantName.toLowerCase().contains(q) ||
                 a.category.toLowerCase().contains(q) ||
                 a.applicationAddress.toLowerCase().contains(q) ||
@@ -62,7 +62,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
         'normal': 2,
         'low': 3,
       };
-      filtered.sort((a, b) {
+      filtered.sort((dynamic a, dynamic b) {
         final aPriority =
             priorityOrder[a.raw['priority']?.toString().toLowerCase()] ?? 2;
         final bPriority =
@@ -74,7 +74,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
       });
     } else {
       filtered.sort(
-        (a, b) => (b.submittedAt ?? DateTime(2000))
+        (dynamic a, dynamic b) => (b.submittedAt ?? DateTime(2000))
             .compareTo(a.submittedAt ?? DateTime(2000)),
       );
     }
