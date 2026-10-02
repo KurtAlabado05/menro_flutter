@@ -45,9 +45,7 @@ class ReportLocationCard extends StatelessWidget {
               Expanded(
                 child: Semantics(
                   label: 'Use GPS to get current location',
-                  button: true,
                   enabled: !isFetching,
-                  onTap: isFetching ? null : onRefreshGps,
                   child: OutlinedButton.icon(
                     onPressed: isFetching ? null : onRefreshGps,
                     icon: const Icon(Icons.my_location, size: 18),
@@ -59,9 +57,7 @@ class ReportLocationCard extends StatelessWidget {
               Expanded(
                 child: Semantics(
                   label: 'Pick location on the map',
-                  button: true,
                   enabled: !isFetching,
-                  onTap: isFetching ? null : onPickOnMap,
                   child: OutlinedButton.icon(
                     onPressed: isFetching ? null : onPickOnMap,
                     icon: const Icon(Icons.map_outlined, size: 18),

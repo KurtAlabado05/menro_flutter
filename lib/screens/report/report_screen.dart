@@ -651,9 +651,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           const SizedBox(height: AppSpacing.md),
                           Semantics(
                             label: 'Report category: $_selectedCategory',
-                            button: true,
                             enabled: true,
-                            onTap: () {},
                             child: DropdownButtonFormField<String>(
                               initialValue: _selectedCategory,
                               isExpanded: true,
