@@ -103,7 +103,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
     final filteredQueue = _filterAndSortQueue(provider.queue);
     final allCount = provider.queue.length;
     final reportCount = provider.queue
-        .where((a) => a.sourceCollection == 'reports')
+        .where((dynamic a) => a.sourceCollection == 'reports')
         .length;
     final permitCount = allCount - reportCount;
 
