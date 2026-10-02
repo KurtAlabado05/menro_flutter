@@ -177,9 +177,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
                   // Type filter
                   Semantics(
                     label: _filterType == 'all' ? 'All applications filter, selected' : 'All applications filter',
-                    button: true,
                     enabled: true,
-                    onTap: () {},
                     child: FilterChip(
                       selected: _filterType == 'all',
                       label: Text('All ($allCount)'),
@@ -190,9 +188,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Semantics(
                     label: _filterType == 'reports' ? 'Reports filter, selected' : 'Reports filter',
-                    button: true,
                     enabled: true,
-                    onTap: () {},
                     child: FilterChip(
                       selected: _filterType == 'reports',
                       label: Text('Reports ($reportCount)'),
@@ -203,9 +199,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Semantics(
                     label: _filterType == 'permits' ? 'Permits filter, selected' : 'Permits filter',
-                    button: true,
                     enabled: true,
-                    onTap: () {},
                     child: FilterChip(
                       selected: _filterType == 'permits',
                       label: Text('Permits ($permitCount)'),
@@ -217,9 +211,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
                   // Sort dropdown
                   Semantics(
                     label: 'Sort by $_sortBy',
-                    button: true,
                     enabled: true,
-                    onTap: () {},
                     child: DropdownButton<String>(
                       value: _sortBy,
                       underline: Container(
@@ -296,9 +288,7 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
 
                   return Semantics(
                     label: semanticLabel,
-                    button: true,
                     enabled: true,
-                    onTap: () {},
                     child: Card(
                       elevation: 0,
                       color: AppColors.cardWhite,
