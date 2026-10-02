@@ -43,18 +43,30 @@ class ReportLocationCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: isFetching ? null : onRefreshGps,
-                  icon: const Icon(Icons.my_location, size: 18),
-                  label: const Text('Use GPS'),
+                child: Semantics(
+                  label: 'Use GPS to get current location',
+                  button: true,
+                  enabled: !isFetching,
+                  onTap: isFetching ? null : onRefreshGps,
+                  child: OutlinedButton.icon(
+                    onPressed: isFetching ? null : onRefreshGps,
+                    icon: const Icon(Icons.my_location, size: 18),
+                    label: const Text('Use GPS'),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: isFetching ? null : onPickOnMap,
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text('Pick on map'),
+                child: Semantics(
+                  label: 'Pick location on the map',
+                  button: true,
+                  enabled: !isFetching,
+                  onTap: isFetching ? null : onPickOnMap,
+                  child: OutlinedButton.icon(
+                    onPressed: isFetching ? null : onPickOnMap,
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('Pick on map'),
+                  ),
                 ),
               ),
             ],

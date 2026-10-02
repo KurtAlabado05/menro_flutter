@@ -649,32 +649,38 @@ class _ReportScreenState extends State<ReportScreen> {
                                 : null,
                           ),
                           const SizedBox(height: AppSpacing.md),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedCategory,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'Category',
-                              prefixIcon: Icon(
-                                _categoryIcons[_selectedCategory] ??
-                                    Icons.category_outlined,
-                                color: AppColors.textGrey,
-                              ),
-                            ),
-                            items: [
-                              for (final category in _categories)
-                                DropdownMenuItem(
-                                  value: category,
-                                  child: Text(
-                                    category,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                          Semantics(
+                            label: 'Report category: $_selectedCategory',
+                            button: true,
+                            enabled: true,
+                            onTap: () {},
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _selectedCategory,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: 'Category',
+                                prefixIcon: Icon(
+                                  _categoryIcons[_selectedCategory] ??
+                                      Icons.category_outlined,
+                                  color: AppColors.textGrey,
                                 ),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _selectedCategory = val);
-                              }
-                            },
+                              ),
+                              items: [
+                                for (final category in _categories)
+                                  DropdownMenuItem(
+                                    value: category,
+                                    child: Text(
+                                      category,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedCategory = val);
+                                }
+                              },
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           CustomTextField(
