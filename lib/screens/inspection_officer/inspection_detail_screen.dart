@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/inspection_application_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inspection_provider.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/status_badge.dart';
 import 'case_documentation_screen.dart';
 
@@ -99,8 +100,10 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
         actingUser: actingUser,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Inspection findings saved')),
+        showAppSnackBar(
+          context,
+          'Inspection findings saved',
+          type: AppMessageType.success,
         );
       }
     });
@@ -159,8 +162,10 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
         actingUser: actingUser,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Forwarded to DENR Officer')),
+        showAppSnackBar(
+          context,
+          'Forwarded to DENR Officer',
+          type: AppMessageType.success,
         );
         Navigator.of(context).pop();
       }
