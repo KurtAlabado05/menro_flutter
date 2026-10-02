@@ -121,34 +121,44 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
               AppSpacing.lg,
               0,
             ),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search applications...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: AppColors.primary,
-                  size: 20,
+            child: Semantics(
+              label: 'Search applications',
+              textField: true,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search applications...',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? Semantics(
+                          label: 'Clear search',
+                          button: true,
+                          enabled: true,
+                          onTap: () {},
+                          child: IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                onChanged: (val) => setState(() => _searchQuery = val.trim()),
               ),
-              onChanged: (val) => setState(() => _searchQuery = val.trim()),
             ),
           ),
 
@@ -159,51 +169,79 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.md,
             ),
-            child: Row(
-              children: [
-                // Type filter
-                FilterChip(
-                  selected: _filterType == 'all',
-                  label: Text('All ($allCount)'),
-                  onSelected: (selected) =>
-                      setState(() => _filterType = 'all'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                FilterChip(
-                  selected: _filterType == 'reports',
-                  label: Text('Reports ($reportCount)'),
-                  onSelected: (selected) =>
-                      setState(() => _filterType = 'reports'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                FilterChip(
-                  selected: _filterType == 'permits',
-                  label: Text('Permits ($permitCount)'),
-                  onSelected: (selected) =>
-                      setState(() => _filterType = 'permits'),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                // Sort dropdown
-                DropdownButton<String>(
-                  value: _sortBy,
-                  underline: Container(
-                    height: 2,
-                    color: AppColors.primary,
+            child: Semantics(
+              label: 'Filter and sort options',
+              container: true,
+              child: Row(
+                children: [
+                  // Type filter
+                  Semantics(
+                    label: _filterType == 'all' ? 'All applications filter, selected' : 'All applications filter',
+                    button: true,
+                    enabled: true,
+                    onTap: () {},
+                    child: FilterChip(
+                      selected: _filterType == 'all',
+                      label: Text('All ($allCount)'),
+                      onSelected: (selected) =>
+                          setState(() => _filterType = 'all'),
+                    ),
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'priority',
-                      child: Text('Priority'),
+                  const SizedBox(width: AppSpacing.sm),
+                  Semantics(
+                    label: _filterType == 'reports' ? 'Reports filter, selected' : 'Reports filter',
+                    button: true,
+                    enabled: true,
+                    onTap: () {},
+                    child: FilterChip(
+                      selected: _filterType == 'reports',
+                      label: Text('Reports ($reportCount)'),
+                      onSelected: (selected) =>
+                          setState(() => _filterType = 'reports'),
                     ),
-                    DropdownMenuItem(
-                      value: 'submitted',
-                      child: Text('Recently Submitted'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Semantics(
+                    label: _filterType == 'permits' ? 'Permits filter, selected' : 'Permits filter',
+                    button: true,
+                    enabled: true,
+                    onTap: () {},
+                    child: FilterChip(
+                      selected: _filterType == 'permits',
+                      label: Text('Permits ($permitCount)'),
+                      onSelected: (selected) =>
+                          setState(() => _filterType = 'permits'),
                     ),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _sortBy = value ?? 'priority'),
-                ),
-              ],
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  // Sort dropdown
+                  Semantics(
+                    label: 'Sort by $_sortBy',
+                    button: true,
+                    enabled: true,
+                    onTap: () {},
+                    child: DropdownButton<String>(
+                      value: _sortBy,
+                      underline: Container(
+                        height: 2,
+                        color: AppColors.primary,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'priority',
+                          child: Text('Priority'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'submitted',
+                          child: Text('Recently Submitted'),
+                        ),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _sortBy = value ?? 'priority'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -245,57 +283,69 @@ class _InspectionQueueScreenState extends State<InspectionQueueScreen> {
                           .toLowerCase() ??
                       'normal';
 
-                  return Card(
-                    elevation: 0,
-                    color: AppColors.cardWhite,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.sm,
+                  final appTitle = application.sourceCollection == 'reports'
+                      ? (application.raw['title'] ?? application.category)
+                          .toString()
+                      : application.applicantName.isEmpty
+                      ? 'Unknown Applicant'
+                      : application.applicantName;
+
+                  final semanticLabel =
+                      '$appTitle, ${application.applicationType.isEmpty ? application.type : application.applicationType}, '
+                      'Documents: $verified of $total, Status: ${application.status}, Priority: $priority';
+
+                  return Semantics(
+                    label: semanticLabel,
+                    button: true,
+                    enabled: true,
+                    onTap: () {},
+                    child: Card(
+                      elevation: 0,
+                      color: AppColors.cardWhite,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade200),
                       ),
-                      leading: _getPriorityIndicator(priority),
-                      title: Text(
-                        application.sourceCollection == 'reports'
-                            ? (application.raw['title'] ?? application.category)
-                                .toString()
-                            : application.applicantName.isEmpty
-                            ? 'Unknown Applicant'
-                            : application.applicantName,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.xs),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              application.sourceCollection == 'reports'
-                                  ? '${application.applicantName} · ${application.applicationAddress}'
-                                  : application.applicationType.isEmpty
-                                  ? application.type
-                                  : application.applicationType,
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              'Documents: $verified/$total',
-                              style: const TextStyle(
-                                color: AppColors.textGrey,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.sm,
                         ),
-                      ),
-                      isThreeLine: true,
-                      trailing: StatusBadge(status: application.status),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              InspectionDetailScreen(application: application),
+                        leading: _getPriorityIndicator(priority),
+                        title: Text(
+                          appTitle,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                application.sourceCollection == 'reports'
+                                    ? '${application.applicantName} · ${application.applicationAddress}'
+                                    : application.applicationType.isEmpty
+                                    ? application.type
+                                    : application.applicationType,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                'Documents: $verified/$total',
+                                style: const TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        isThreeLine: true,
+                        trailing: StatusBadge(status: application.status),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                InspectionDetailScreen(application: application),
+                          ),
                         ),
                       ),
                     ),
