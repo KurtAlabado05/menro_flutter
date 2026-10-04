@@ -4,7 +4,60 @@ CENRO Connect is a Flutter application for environmental reporting and related
 local government services. This summary describes the environmental report
 submission and case-correspondence workflow currently present in the app.
 
+## EcoMap Branding
+
+The supplied EcoMap logo is stored in `assets/images/ui/ecomap_logo.png`.
+Login, registration, onboarding, startup, and the citizen and inspection-officer headers display it
+beside the existing Baliwag seal used for MENRO partnership branding.
+The shared logo widget uses square display variants with excess transparent
+margins removed, so both marks remain legible at header sizes. Original files
+are preserved. Both marks have transparent backgrounds without a white
+container. Header marks use 44-pixel image boxes with no inner padding; login
+marks use 112-pixel boxes.
+
+Regenerate the display variants after replacing either source:
+
+```sh
+dart run tool/prepare_brand_logos.dart
+```
+
+Launcher icons for Android, iOS, web, Windows, and macOS are generated from the
+same source. After changing the logo, run:
+
+```sh
+flutter pub get
+dart run flutter_launcher_icons
+```
+
+Native icon changes require rebuilding/reinstalling the app. Browser favicons
+and installed web-app icons may require a cache refresh or web-app reinstall.
+After adding assets, stop and relaunch `flutter run` so the development server
+rebuilds its asset bundle. Hot reload alone can leave new image URLs returning
+404.
+
+Onboarding opens automatically on devices that have not completed a successful
+login. Returning users can replay it through **View app introduction** on the
+login screen without resetting their login preference. Closing or completing
+the replay returns to the existing login screen.
+
 ## Environmental Reporting
+
+### Environmental Map
+
+The map loads reports and community projects independently, so a failed layer
+does not hide records from the other layer. Citizens and organizations see their
+own reports, while staff with workflow access can see all reports; project
+visibility remains available to signed-in accounts. Existing Firestore access
+rules are unchanged.
+
+Use Refresh (or Retry after an error) to reload map records. Records without
+usable latitude and longitude are counted in the map header but are not placed
+at invented locations. The Baliwag boundary remains highlighted, but it is not
+a hard viewport restriction: zoom controls and panning can show nearby projects
+outside the boundary. Zoom controls disable at the supported zoom limits.
+
+Report, permit, and project tabs share rounded selection, hover, and ripple
+shapes.
 
 ### Reporter Workflow
 

@@ -10,11 +10,11 @@ class CloudinaryImageService {
   /// Unsigned upload preset name.
   final String uploadPreset;
 
-  /// Example: https://api.cloudinary.com/v1_1/<cloud_name>/image/upload
+  /// Example: `https://api.cloudinary.com/v1_1/<cloud_name>/image/upload`
   String get _imageUploadUrl =>
       'https://api.cloudinary.com/v1_1/$cloudName/image/upload';
 
-  /// Example: https://api.cloudinary.com/v1_1/<cloud_name>/raw/upload
+  /// Example: `https://api.cloudinary.com/v1_1/<cloud_name>/raw/upload`
   String get _rawUploadUrl =>
       'https://api.cloudinary.com/v1_1/$cloudName/raw/upload';
 
@@ -29,11 +29,13 @@ class CloudinaryImageService {
   Future<String> uploadImage({
     required Uint8List bytes,
     required String fileName,
+    Duration? timeout,
   }) async {
     return _upload(
       bytes: bytes,
       fileName: fileName,
       uploadUrl: _imageUploadUrl,
+      timeout: timeout,
     );
   }
 
@@ -51,6 +53,24 @@ class CloudinaryImageService {
     required Uint8List bytes,
     required String fileName,
     required String uploadUrl,
+    Duration? timeout,
+  }) async {
+    final client = http.Client();
+    try {
+      final operation = _sendUpload(
+        client: client, bytes: bytes, fileName: fileName, uploadUrl: uploadUrl,
+      );
+      return await (timeout == null ? operation : operation.timeout(timeout));
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<String> _sendUpload({
+    required http.Client client,
+    required Uint8List bytes,
+    required String fileName,
+    required String uploadUrl,
   }) async {
     final uri = Uri.parse(uploadUrl);
 
@@ -65,7 +85,7 @@ class CloudinaryImageService {
       http.MultipartFile.fromBytes('file', bytes, filename: fileName),
     );
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await client.send(request);
     final responseBody = await streamedResponse.stream.bytesToString();
 
     if (streamedResponse.statusCode < 200 ||

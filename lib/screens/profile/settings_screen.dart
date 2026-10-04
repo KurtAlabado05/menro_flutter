@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         border: Border.all(color: borderHighlight ?? Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
+            color: Colors.black.withValues(alpha: 0.01),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -208,7 +208,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.08),
+          color: iconColor.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: iconColor, size: 18),
@@ -259,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.08),
+              color: iconColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: iconColor, size: 18),
@@ -296,7 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 // ── Setting Section Header Indicator ─────────────────────────────
 class _SettingHeader extends StatelessWidget {
-  const _SettingHeader({required this.title, this.isDanger = false});
+  const _SettingHeader({required this.title}) : isDanger = false;
   final String title;
   final bool isDanger;
 

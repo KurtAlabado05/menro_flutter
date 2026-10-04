@@ -263,7 +263,7 @@ class _CitizenTrackingCardState extends State<CitizenTrackingCard> {
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                 const SizedBox(height: 4),
               ],
             ),
@@ -285,10 +285,10 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.18),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
         ),
       ),
       child: Text(

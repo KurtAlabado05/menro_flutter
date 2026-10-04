@@ -120,7 +120,7 @@ class _JoinOrganizationScreenState extends State<JoinOrganizationScreen> {
                 validator: _required,
               ),
               DropdownButtonFormField<String>(
-                value: _selectedProvince,
+                initialValue: _selectedProvince,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Province on permit',
@@ -147,7 +147,7 @@ class _JoinOrganizationScreenState extends State<JoinOrganizationScreen> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: _selectedCity,
+                initialValue: _selectedCity,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'City / municipality on permit',

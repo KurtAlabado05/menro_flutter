@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/tree_species_aliases.dart';
 import '../../models/species_identification_result.dart';
 import '../../models/user_model.dart';
+import '../../models/report_location.dart';
+import '../../models/photo_identification_error.dart';
 
 enum PermitAction { cutting, trimming, others }
 
@@ -35,6 +37,16 @@ class TreeCuttingFormModel extends ChangeNotifier {
     'Narra',
     'Ipil-Ipil',
     'Coconut',
+    'White Lauan',
+    'Guijo',
+    'Apitong',
+    'Red Lauan',
+    'Mayapis',
+    'Tindalo',
+    'Bolongeta',
+    'Malaikmo',
+    'Bayanti',
+    'Malatanglin',
     speciesOthers,
   ];
 
@@ -84,6 +96,13 @@ class TreeCuttingFormModel extends ChangeNotifier {
   String? ptaCertificationUrl;
   final List<String> treePhotoUrls = [];
   final List<String> contextPhotoUrls = [];
+  final Set<String> validatedTreePhotoUrls = {};
+  final Map<String, OnSiteTreeCapture> onSiteTreeCaptures = {};
+
+  /// Tree photos accepted only as on-site evidence (species unconfirmed).
+  final Set<String> unverifiedTreePhotoUrls = {};
+  TreePhotoValidation? treePhotoValidation;
+  String? photoError;
 
   bool declarationChecked = false;
   bool showDocumentErrors = false;
@@ -96,6 +115,7 @@ class TreeCuttingFormModel extends ChangeNotifier {
   bool get showCustomCount => selectedCount == countMore;
   bool get showCustomReason => selectedReason == reasonOthers;
   bool get hasCoordinates => latitude != null && longitude != null;
+  bool get requiresSpeciesInspection => unverifiedTreePhotoUrls.isNotEmpty;
 
   String get actionKey => switch (action) {
     PermitAction.cutting => 'cutting',
@@ -195,13 +215,15 @@ class TreeCuttingFormModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLocation(Map<String, dynamic> result) {
-    latitude = result['lat'] as double?;
-    longitude = result['lng'] as double?;
-    fullAddress.text = result['address'] as String? ?? '';
-    barangay.text = result['barangay'] as String? ?? '';
-    street.text = result['street'] as String? ?? '';
-    landmark.text = result['landmark'] as String? ?? '';
+  void setLocation(ReportLocation result) {
+    latitude = result.latitude;
+    longitude = result.longitude;
+    // On-site photos are checked against the pin, so a moved pin needs a new receipt.
+    treePhotoValidation = null;
+    fullAddress.text = result.address ?? '';
+    barangay.text = result.barangay ?? '';
+    street.text = result.street ?? '';
+    landmark.text = result.landmark ?? '';
     notifyListeners();
   }
 
@@ -214,7 +236,13 @@ class TreeCuttingFormModel extends ChangeNotifier {
     PermitAttachment.ptaCertification => _set(ptaCertificationUrl),
   };
 
-  void attach(PermitAttachment kind, String url) {
+  void attach(
+    PermitAttachment kind,
+    String url, {
+    bool photoValidated = false,
+    OnSiteTreeCapture? onSiteCapture,
+    bool speciesUnverified = false,
+  }) {
     switch (kind) {
       case PermitAttachment.requestLetter:
         requestLetterUrl = url;
@@ -223,6 +251,10 @@ class TreeCuttingFormModel extends ChangeNotifier {
       case PermitAttachment.landTitle:
         landTitleUrl = url;
       case PermitAttachment.treePhotos:
+        treePhotoValidation = null;
+        if (photoValidated) validatedTreePhotoUrls.add(url);
+        if (onSiteCapture != null) onSiteTreeCaptures[url] = onSiteCapture;
+        if (speciesUnverified) unverifiedTreePhotoUrls.add(url);
         treePhotoUrls.add(url);
       case PermitAttachment.contextPhotos:
         contextPhotoUrls.add(url);
@@ -242,12 +274,27 @@ class TreeCuttingFormModel extends ChangeNotifier {
       case PermitAttachment.landTitle:
         landTitleUrl = null;
       case PermitAttachment.treePhotos:
-        if (index != null) treePhotoUrls.removeAt(index);
+        if (index != null) {
+          validatedTreePhotoUrls.remove(treePhotoUrls[index]);
+          onSiteTreeCaptures.remove(treePhotoUrls[index]);
+          unverifiedTreePhotoUrls.remove(treePhotoUrls[index]);
+          treePhotoUrls.removeAt(index);
+          treePhotoValidation = null;
+        }
       case PermitAttachment.contextPhotos:
         if (index != null) contextPhotoUrls.removeAt(index);
       case PermitAttachment.ptaCertification:
         ptaCertificationUrl = null;
     }
+    notifyListeners();
+  }
+
+  /// Records the server's final per-photo verdict before writing the permit.
+  void applyTreePhotoValidation(TreePhotoValidation validation) {
+    treePhotoValidation = validation;
+    unverifiedTreePhotoUrls
+      ..clear()
+      ..addAll(validation.unverifiedUrls);
     notifyListeners();
   }
 
@@ -263,6 +310,9 @@ class TreeCuttingFormModel extends ChangeNotifier {
       return 'Upload the LGU / Barangay certification.';
     }
     if (treePhotoUrls.isEmpty) return 'Add at least one photo of the trees.';
+    if (!treePhotoUrls.every(validatedTreePhotoUrls.contains)) {
+      return 'Replace or validate every tree photo before continuing.';
+    }
     if (isSchoolGrounds && !_set(ptaCertificationUrl)) {
       return 'School grounds require a certification from the PTA President.';
     }
@@ -311,6 +361,16 @@ class TreeCuttingFormModel extends ChangeNotifier {
         'ptaPresidentCertificationPath': ptaCertificationUrl,
       },
       'status': 'pending',
+      if (treePhotoValidation != null) ...{
+        'treePhotoValidationId': treePhotoValidation!.id,
+        'speciesVerification': treePhotoValidation!.speciesVerification,
+        if (treePhotoValidation!.requiresInspection) ...{
+          'inspectionRequired': true,
+          'unverifiedTreePhotoUrls': List<String>.of(
+            treePhotoValidation!.unverifiedUrls,
+          ),
+        },
+      },
       'submittedAt': submittedAt,
       'submittedByUid': uid,
       'statusHistory': [

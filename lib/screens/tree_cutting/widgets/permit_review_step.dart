@@ -51,6 +51,27 @@ class PermitReviewStep extends StatelessWidget {
           key: formKey,
           child: Column(
             children: [
+              if (model.submitting) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: const Text(
+                    'Checking all tree photos and submitting your application...',
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (model.photoError != null) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    model.photoError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               _ReviewCard(
                 title: 'Applicant',
                 onEdit: () => onEditStep(0),
@@ -91,9 +112,17 @@ class PermitReviewStep extends StatelessWidget {
                   DetailRow(label: 'Send to', value: _authorityText),
                   DetailRow(
                     label: 'Files',
-                    value: '$docCount uploaded '
+                    value:
+                        '$docCount uploaded '
                         '(${model.treePhotoUrls.length} tree photos)',
                   ),
+                  if (model.requiresSpeciesInspection)
+                    DetailRow(
+                      label: 'Species check',
+                      value:
+                          '${model.unverifiedTreePhotoUrls.length} on-site photo(s); '
+                          'species will be verified at the site inspection',
+                    ),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
@@ -132,19 +161,22 @@ class PermitReviewStep extends StatelessWidget {
                       builder: (state) => Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CheckboxListTile(
-                            value: model.declarationChecked,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            enabled: !model.submitting,
-                            title: const Text(
-                              'I agree with the declaration above',
-                              style: TextStyle(fontSize: 13),
+                          Material(
+                            type: MaterialType.transparency,
+                            child: CheckboxListTile(
+                              value: model.declarationChecked,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              enabled: !model.submitting,
+                              title: const Text(
+                                'I agree with the declaration above',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              onChanged: (v) {
+                                model.setDeclaration(v ?? false);
+                                state.didChange(v);
+                              },
                             ),
-                            onChanged: (v) {
-                              model.setDeclaration(v ?? false);
-                              state.didChange(v);
-                            },
                           ),
                           if (state.hasError)
                             Padding(

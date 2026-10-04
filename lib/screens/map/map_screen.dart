@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
@@ -7,38 +6,19 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../../models/project_model.dart';
-import '../../models/report_model.dart';
+import '../../core/constants/app_tokens.dart';
+import '../../services/map_records_service.dart';
 import '../project/project_details_screen.dart';
 import '../report/report_details_screen.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.recordsService, this.tileProvider});
+
+  final MapRecordsService? recordsService;
+  final TileProvider? tileProvider;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
-}
-
-class _MapPin {
-  final String id;
-  final String title;
-  final String location;
-  final double latitude;
-  final double longitude;
-  final String type; // 'report' | 'project'
-  final String? status;
-  final String? relatedId;
-
-  _MapPin({
-    required this.id,
-    required this.title,
-    required this.location,
-    required this.latitude,
-    required this.longitude,
-    required this.type,
-    this.status,
-    this.relatedId,
-  });
 }
 
 class _MapScreenState extends State<MapScreen> {
@@ -53,19 +33,20 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   String _activeFilter = 'All';
-  _MapPin? _selectedPin;
+  MapRecord? _selectedPin;
 
-  MapController _mapController = MapController();
+  final MapController _mapController = MapController();
+  late final MapRecordsService _recordsService =
+      widget.recordsService ?? MapRecordsService();
+  bool _mapReady = false;
+  double _zoom = 12;
+  static const double _minZoom = 11;
+  static const double _maxZoom = 17;
   bool _hasLocationPermission = false;
   LatLng? _myLatLng;
 
   static final LatLng _defaultCenter = LatLng(14.9545, 120.8995);
-  static final LatLngBounds _baliwagBounds = LatLngBounds(
-    LatLng(14.9100, 120.8400),
-    LatLng(15.0100, 120.9600),
-  );
-
-  List<_MapPin> _pins = [];
+  List<MapRecord> _pins = [];
   bool _isLoadingPins = false;
   int _recordsWithoutCoordinates = 0;
   String? _pinLoadError;
@@ -74,82 +55,31 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadPinsFromFirestore() async {
     if (_isLoadingPins) return;
-    setState(() => _isLoadingPins = true);
-    setState(() => _pinLoadError = null);
+    setState(() {
+      _isLoadingPins = true;
+      _pinLoadError = null;
+    });
 
     try {
-      final snapshots = await Future.wait([
-        FirebaseFirestore.instance.collection('reports').get(),
-        FirebaseFirestore.instance.collection('projects').get(),
-      ]);
-
-      final pins = <_MapPin>[];
-      var recordsWithoutCoordinates = 0;
-
-      for (final doc in snapshots[0].docs) {
-        final r = ReportModel.fromFirestore(doc.data(), doc.id);
-        final lat = r.latitude;
-        final lng = r.longitude;
-        if (lat == null || lng == null) {
-          recordsWithoutCoordinates++;
-          continue;
-        }
-
-        pins.add(
-          _MapPin(
-            id: 'report_${r.id}',
-            title: r.title,
-            location: r.location,
-            latitude: lat,
-            longitude: lng,
-            type: 'report',
-            status: r.status,
-            relatedId: r.id,
-          ),
-        );
-      }
-
-      for (final doc in snapshots[1].docs) {
-        final p = ProjectModel.fromFirestore(doc.data(), doc.id);
-        final lat = p.latitude;
-        final lng = p.longitude;
-        if (lat == null || lng == null) {
-          recordsWithoutCoordinates++;
-          continue;
-        }
-
-        pins.add(
-          _MapPin(
-            id: 'project_${p.id}',
-            title: p.title,
-            location: p.location,
-            latitude: lat,
-            longitude: lng,
-            type: 'project',
-            status: p.status,
-            relatedId: p.id,
-          ),
-        );
-      }
-
-      pins.sort((a, b) => a.type.compareTo(b.type));
-
+      final result = await _recordsService.load();
+      if (!mounted) return;
+      final errors = [
+        result.reports.error,
+        result.projects.error,
+      ].nonNulls.toList();
       setState(() {
-        _pins = pins;
-        _recordsWithoutCoordinates = recordsWithoutCoordinates;
+        _pins = [...result.reports.records, ...result.projects.records];
+        _recordsWithoutCoordinates =
+            result.reports.unmappedCount + result.projects.unmappedCount;
+        _pinLoadError = errors.isEmpty ? null : errors.join(' ');
         _selectedPin = null;
       });
-    } catch (e) {
-      debugPrint('MapScreen load pins error: $e');
-      if (mounted) {
-        setState(() => _pinLoadError = 'Could not load map records.');
-      }
     } finally {
       if (mounted) setState(() => _isLoadingPins = false);
     }
   }
 
-  List<_MapPin> get _filteredPins {
+  List<MapRecord> get _filteredPins {
     if (_activeFilter == 'Reports') {
       return _pins.where((p) => p.type == 'report').toList();
     } else if (_activeFilter == 'Projects') {
@@ -163,6 +93,25 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _loadOSMBoundary(); // 🟢 ADDED: Async initialization for boundary path assets
     _initLocation();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _changeZoom(double delta) {
+    if (!_mapReady) return;
+    final target = (_mapController.zoom + delta).clamp(_minZoom, _maxZoom);
+    _mapController.move(_mapController.center, target);
+  }
+
+  void _selectFilter(String filter) {
+    setState(() {
+      _activeFilter = filter;
+      _selectedPin = null;
+    });
   }
 
   // 🟢 ASSET LOADER: Parses boundary data directly for dashboard alignment
@@ -232,24 +181,17 @@ class _MapScreenState extends State<MapScreen> {
       if (!granted) return;
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       if (!mounted) return;
       final latLng = LatLng(position.latitude, position.longitude);
-      final clamped = _clampToBounds(latLng);
-      setState(() => _myLatLng = clamped);
+      setState(() => _myLatLng = latLng);
     } catch (e) {
       debugPrint('MapScreen location error: $e');
     }
-  }
-
-  LatLng _clampToBounds(LatLng point) {
-    final sw = _baliwagBounds.southWest;
-    final ne = _baliwagBounds.northEast;
-    final lat = point.latitude.clamp(sw.latitude, ne.latitude);
-    final lng = point.longitude.clamp(sw.longitude, ne.longitude);
-    return LatLng(lat, lng);
   }
 
   Future<void> _recenterToMyLocation() async {
@@ -257,12 +199,21 @@ class _MapScreenState extends State<MapScreen> {
       await _initLocation();
     }
     final target = _myLatLng;
-    if (target == null) return;
-    final clamped = _clampToBounds(target);
-    _mapController.move(clamped, 15);
+    if (!mounted || !_mapReady) return;
+    if (target == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Your location is unavailable. Enable location access and retry.',
+          ),
+        ),
+      );
+      return;
+    }
+    _mapController.move(target, 15);
   }
 
-  Color _markerColorForPin(_MapPin pin) {
+  Color _markerColorForPin(MapRecord pin) {
     if (pin.type == 'report') {
       switch (pin.status) {
         case 'resolved':
@@ -336,13 +287,22 @@ class _MapScreenState extends State<MapScreen> {
               options: MapOptions(
                 center: _defaultCenter,
                 zoom: 12,
-                minZoom: 11,
-                maxZoom: 17,
-                maxBounds: _baliwagBounds,
+                minZoom: _minZoom,
+                maxZoom: _maxZoom,
+                onMapReady: () {
+                  if (mounted) setState(() => _mapReady = true);
+                },
+                onPositionChanged: (position, _) {
+                  final zoom = position.zoom;
+                  if (mounted && zoom != null && zoom != _zoom) {
+                    setState(() => _zoom = zoom);
+                  }
+                },
                 onTap: (_, __) => setState(() => _selectedPin = null),
               ),
               children: [
                 TileLayer(
+                  tileProvider: widget.tileProvider,
                   urlTemplate:
                       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c'],
@@ -354,8 +314,8 @@ class _MapScreenState extends State<MapScreen> {
                     if (_baliwagPolygon.isNotEmpty)
                       Polygon(
                         points: _baliwagPolygon,
-                        color: Colors.blue.withOpacity(0.06),
-                        borderColor: Colors.blue.withOpacity(0.6),
+                        color: Colors.blue.withValues(alpha: 0.06),
+                        borderColor: Colors.blue.withValues(alpha: 0.6),
                         borderStrokeWidth: 2.5,
                         isFilled: true,
                       ),
@@ -370,153 +330,175 @@ class _MapScreenState extends State<MapScreen> {
                 alignment: Alignment.topCenter,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.arrow_back),
-                              tooltip: 'Back',
-                              visualDensity: VisualDensity.compact,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: AppRadius.lgAll,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 12,
+                              offset: const Offset(0, 3),
                             ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Baliwag environmental map',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.textDark,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _pinLoadError ??
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                IconButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: const Icon(Icons.arrow_back),
+                                  tooltip: 'Back',
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Baliwag environmental map',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.textDark,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
                                         (_isLoadingPins
                                             ? 'Loading reports and projects...'
                                             : '${_pins.length} mapped records'),
-                                    style: const TextStyle(
-                                      color: AppColors.textGrey,
-                                      fontSize: 12,
+                                        style: const TextStyle(
+                                          color: AppColors.textGrey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_pinLoadError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  _pinLoadError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _isLoadingPins
+                                    ? null
+                                    : _loadPinsFromFirestore,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: Text(
+                                  _pinLoadError == null ? 'Refresh' : 'Retry',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _FilterChip(
+                                    label: 'All',
+                                    isSelected: _activeFilter == 'All',
+                                    onTap: () => _selectFilter('All'),
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _FilterChip(
+                                    label:
+                                        'Reports (${_pins.where((pin) => pin.type == 'report').length})',
+                                    isSelected: _activeFilter == 'Reports',
+                                    onTap: () => _selectFilter('Reports'),
+                                    color: AppColors.statusPending,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _FilterChip(
+                                    label:
+                                        'Projects (${_pins.where((pin) => pin.type == 'project').length})',
+                                    isSelected: _activeFilter == 'Projects',
+                                    onTap: () => _selectFilter('Projects'),
+                                    color: AppColors.statusVerified,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_recordsWithoutCoordinates > 0) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: AppColors.textGrey,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '$_recordsWithoutCoordinates records cannot be mapped because coordinates are missing or invalid.',
+                                      style: const TextStyle(
+                                        color: AppColors.textGrey,
+                                        fontSize: 11,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _FilterChip(
-                                label: 'All',
-                                isSelected: _activeFilter == 'All',
-                                onTap: () =>
-                                    setState(() => _activeFilter = 'All'),
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: _FilterChip(
-                                label:
-                                    'Reports (${_pins.where((pin) => pin.type == 'report').length})',
-                                isSelected: _activeFilter == 'Reports',
-                                onTap: () =>
-                                    setState(() => _activeFilter = 'Reports'),
-                                color: AppColors.statusPending,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: _FilterChip(
-                                label:
-                                    'Projects (${_pins.where((pin) => pin.type == 'project').length})',
-                                isSelected: _activeFilter == 'Projects',
-                                onTap: () =>
-                                    setState(() => _activeFilter = 'Projects'),
-                                color: AppColors.statusVerified,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_recordsWithoutCoordinates > 0) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: AppColors.textGrey,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '$_recordsWithoutCoordinates records cannot be mapped because coordinates are missing.',
-                                  style: const TextStyle(
-                                    color: AppColors.textGrey,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
                             ],
-                          ),
-                        ],
-                      ],
-                    ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _MapControlButton(
+                              icon: Icons.add,
+                              tooltip: 'Zoom in',
+                              onTap: _mapReady && _zoom < _maxZoom
+                                  ? () => _changeZoom(1)
+                                  : null,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            _MapControlButton(
+                              icon: Icons.remove,
+                              tooltip: 'Zoom out',
+                              onTap: _mapReady && _zoom > _minZoom
+                                  ? () => _changeZoom(-1)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-
-            Positioned(
-              top: 205,
-              right: 16,
-              child: Column(
-                children: [
-                  _MapControlButton(
-                    icon: Icons.add,
-                    tooltip: 'Zoom in',
-                    onTap: () => _mapController.move(
-                      _mapController.center,
-                      (_mapController.zoom + 1).clamp(11, 17),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _MapControlButton(
-                    icon: Icons.remove,
-                    tooltip: 'Zoom out',
-                    onTap: () => _mapController.move(
-                      _mapController.center,
-                      (_mapController.zoom - 1).clamp(11, 17),
-                    ),
-                  ),
-                ],
               ),
             ),
 
@@ -537,18 +519,16 @@ class _MapScreenState extends State<MapScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ReportDetailsScreen(
-                            reportId: _selectedPin!.relatedId!,
-                          ),
+                          builder: (_) =>
+                              ReportDetailsScreen(reportId: _selectedPin!.id),
                         ),
                       );
                     } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ProjectDetailsScreen(
-                            projectId: _selectedPin!.relatedId!,
-                          ),
+                          builder: (_) =>
+                              ProjectDetailsScreen(projectId: _selectedPin!.id),
                         ),
                       );
                     }
@@ -561,7 +541,7 @@ class _MapScreenState extends State<MapScreen> {
               bottom: _selectedPin == null ? 24 : 140,
               child: FloatingActionButton(
                 heroTag: 'my_location_btn',
-                onPressed: _recenterToMyLocation,
+                onPressed: _mapReady ? _recenterToMyLocation : null,
                 child: const Icon(Icons.my_location),
               ),
             ),
@@ -589,22 +569,16 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: isSelected ? color.withValues(alpha: 0.12) : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppRadius.pillAll,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.pillAll,
         child: Container(
           constraints: const BoxConstraints(minHeight: 38),
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected
-                  ? color.withValues(alpha: 0.35)
-                  : Colors.transparent,
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
+          decoration: BoxDecoration(borderRadius: AppRadius.pillAll),
           child: Text(
             label,
             maxLines: 1,
@@ -625,7 +599,7 @@ class _FilterChip extends StatelessWidget {
 class _MapControlButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _MapControlButton({
     required this.icon,
@@ -637,10 +611,12 @@ class _MapControlButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.pillAll,
+      clipBehavior: Clip.antiAlias,
       elevation: 3,
       child: IconButton(
         onPressed: onTap,
+        style: IconButton.styleFrom(shape: const CircleBorder()),
         tooltip: tooltip,
         icon: Icon(icon, color: AppColors.textDark),
       ),
@@ -691,7 +667,7 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _PinDetailCard extends StatelessWidget {
-  final _MapPin pin;
+  final MapRecord pin;
   final Color color;
   final VoidCallback onClose;
   final VoidCallback onTap;
@@ -723,7 +699,7 @@ class _PinDetailCard extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
+                      color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -793,7 +769,7 @@ class _PinDetailCard extends StatelessWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
+                      color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

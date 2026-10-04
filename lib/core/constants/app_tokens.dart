@@ -10,10 +10,10 @@ class AppSpacing {
 }
 
 class AppRadius {
-  static const double sm = 8;
-  static const double md = 12;
-  static const double lg = 16;
-  static const double pill = 24;
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double pill = 32;
 
   static BorderRadius get smAll => BorderRadius.circular(sm);
   static BorderRadius get mdAll => BorderRadius.circular(md);

@@ -125,7 +125,13 @@ class _TreeIdentificationScreenState extends State<TreeIdentificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final queue = context.watch<InspectionProvider>().queue;
+    // Only tree cutting applications/permits can be linked here, so
+    // environmental reports are excluded from the queue the officer sees.
+    final queue = context
+        .watch<InspectionProvider>()
+        .queue
+        .where((application) => application.sourceCollection != 'reports')
+        .toList();
     final inspectorId = context.watch<AuthProvider>().user?.id;
     final selectedApplication = queue
         .where((application) => application.id == _linkedApplicationId)

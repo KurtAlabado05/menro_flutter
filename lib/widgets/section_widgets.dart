@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_colors.dart';
 import '../core/constants/app_tokens.dart';
+import '../core/constants/gradient_utils.dart';
 
 class SectionCard extends StatelessWidget {
   const SectionCard({
@@ -46,11 +47,8 @@ class SectionHeader extends StatelessWidget {
         Container(
           width: 32,
           height: 32,
-          decoration: BoxDecoration(
-            color: AppColors.primary.fade(0.1),
-            borderRadius: AppRadius.smAll,
-          ),
-          child: Icon(icon, size: 17, color: AppColors.primary),
+          decoration: GradientUtils.primaryGradientDecoration(radius: 6),
+          child: Icon(icon, size: 17, color: Colors.white),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -166,11 +164,8 @@ class SheetActionTile extends StatelessWidget {
       leading: Container(
         width: 38,
         height: 38,
-        decoration: BoxDecoration(
-          color: AppColors.primary.fade(0.08),
-          borderRadius: AppRadius.mdAll,
-        ),
-        child: Icon(icon, color: AppColors.primary, size: 20),
+        decoration: GradientUtils.primaryGradientDecoration(radius: 8),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
       title: Text(
         label,

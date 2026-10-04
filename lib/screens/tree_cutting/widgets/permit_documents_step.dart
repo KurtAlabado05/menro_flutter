@@ -10,10 +10,12 @@ class PermitDocumentsStep extends StatelessWidget {
     super.key,
     required this.model,
     required this.onUpload,
+    this.onTakeOnSitePhoto,
   });
 
   final TreeCuttingFormModel model;
   final ValueChanged<PermitAttachment> onUpload;
+  final VoidCallback? onTakeOnSitePhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -148,9 +150,10 @@ class PermitDocumentsStep extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   PermitPhotoGroup(
                     title: 'Photos of the trees',
-                    helper: 'Clear, close-up photos of the trees concerned',
+                    helper: 'Each photo must pass plant recognition. A close-up of the leaves works best. If the tree has no leaves or is dead, take an on-site photo at the tree instead.',
                     requirement: 'Required',
                     urls: model.treePhotoUrls,
+                    flaggedUrls: model.unverifiedTreePhotoUrls,
                     uploading: model.uploading == PermitAttachment.treePhotos,
                     disabled: model.busy,
                     showError: errors && model.treePhotoUrls.isEmpty,
@@ -158,7 +161,30 @@ class PermitDocumentsStep extends StatelessWidget {
                     onRemove: (i) =>
                         model.detach(PermitAttachment.treePhotos, index: i),
                   ),
+                  if (onTakeOnSitePhoto != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: model.busy ? null : onTakeOnSitePhoto,
+                        icon: const Icon(Icons.location_on_outlined),
+                        label: const Text(
+                          'No leaves or dead tree? Take on-site photo',
+                        ),
+                      ),
+                    ),
+                  if (model.requiresSpeciesInspection) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    const _InspectionNotice(),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
+                  if (model.photoError != null) ...[
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(model.photoError!,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   PermitPhotoGroup(
                     title: 'Surroundings',
                     helper: 'Wider photos showing nearby structures or lines',
@@ -178,6 +204,34 @@ class PermitDocumentsStep extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _InspectionNotice extends StatelessWidget {
+  const _InspectionNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.orange.fade(0.1),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: Colors.orange.fade(0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.fact_check_outlined, color: Colors.orange.shade800),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: Text(
+              'Species not confirmed from photos. Your application will be flagged so MENRO can verify the species during the site inspection.',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -480,6 +534,7 @@ class PermitPhotoGroup extends StatelessWidget {
     required this.showError,
     required this.onAdd,
     required this.onRemove,
+    this.flaggedUrls = const {},
   });
 
   final String title;
@@ -491,6 +546,9 @@ class PermitPhotoGroup extends StatelessWidget {
   final bool showError;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
+
+  /// Photos accepted only as on-site evidence; shown with an inspection badge.
+  final Set<String> flaggedUrls;
 
   static const double _size = 88;
 
@@ -610,6 +668,32 @@ class PermitPhotoGroup extends StatelessWidget {
                         icon: const Icon(Icons.close, size: 16),
                       ),
                     ),
+                    if (flaggedUrls.contains(urls[index]))
+                      Positioned(
+                        left: 4,
+                        bottom: 4,
+                        child: Tooltip(
+                          message: 'On-site photo: species to be verified at inspection',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade800,
+                              borderRadius: AppRadius.mdAll,
+                            ),
+                            child: const Text(
+                              'On-site',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               );

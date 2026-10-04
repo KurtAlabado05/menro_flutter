@@ -46,3 +46,14 @@ app.*.map.json
 
 # Google Maps API key (keep local)
 /android/app/src/main/res/values/google_maps_api.xml
+
+# Local backend dependencies, development state, and credentials
+**/node_modules/
+**/.wrangler/
+**/__pycache__/
+**/.venv/
+**/.env
+**/.env.*
+!**/.env.example
+**/.dev.vars
+**/.dev.vars.*

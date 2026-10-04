@@ -236,7 +236,7 @@ class _OrganizationApplicationScreenState
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedProvince,
+                      initialValue: _selectedProvince,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Province',
@@ -268,7 +268,7 @@ class _OrganizationApplicationScreenState
                   const SizedBox(width: 12),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedCity,
+                      initialValue: _selectedCity,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'City / municipality',

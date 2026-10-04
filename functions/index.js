@@ -37,6 +37,21 @@ const DROPDOWN_ALIASES = {
   Narra: ['pterocarpus indicus', 'narra', 'amboyna'],
   'Ipil-Ipil': ['leucaena leucocephala', 'ipil-ipil', 'ipil ipil', 'lead tree'],
   Coconut: ['cocos nucifera', 'coconut', 'niyog', 'coco palm'],
+  'White Lauan': ['shorea contorta', 'pentacme contorta', 'white lauan', 'white lauaan'],
+  Guijo: ['shorea guiso', 'guijo', 'red balau', 'red balan'],
+  Apitong: ['dipterocarpus grandiflorus', 'apitong', 'apiton'],
+  'Red Lauan': ['shorea negrosensis', 'rubroshorea negrosensis', 'red lauan'],
+  // "Mayapis" is applied regionally to two different Dipterocarpaceae genera
+  // in the field (Shorea palosapis and Anisoptera thurifera); both
+  // scientific-name aliases are listed so either resolves to this label.
+  Mayapis: ['shorea palosapis', 'rubroshorea palosapis', 'anisoptera thurifera', 'mayapis', 'palosapis'],
+  Tindalo: ['afzelia rhomboidea', 'pahudia rhomboidea', 'intsia rhomboidea', 'tindalo'],
+  Bolongeta: ['diospyros pilosanthera', 'bolongeta', 'bolong-eta'],
+  // Sources disagree on whether "Malaikmo" refers to Celtis philippensis or
+  // the congener Celtis luzonica; both are listed as aliases.
+  Malaikmo: ['celtis philippensis', 'celtis luzonica', 'malaikmo', 'malaitmo'],
+  Bayanti: ['aglaia rimosa', 'bayanti', 'bayati'],
+  Malatanglin: ['adenanthera pavonina', 'malatanglin'],
 };
 
 const OTHERS_LABEL = 'Others (Specify Variant Name)';
@@ -61,6 +76,15 @@ function matchDropdownLabel(scientificName, commonNames = []) {
   return OTHERS_LABEL;
 }
 
+// Used only to give a confident bark-only suggestion (see
+// identifySpeciesForImages/fuseBarkSuggestions) a real scientific name: the
+// first alias per dropdown label is always its canonical binomial name.
+function scientificNameForDropdownLabel(label) {
+  const [binomial] = DROPDOWN_ALIASES[label] || [];
+  if (!binomial) return '';
+  return binomial.charAt(0).toUpperCase() + binomial.slice(1);
+}
+
 function normalizeSuggestion(resultItem) {
   const species = resultItem.species || {};
   const scientificName =
@@ -80,7 +104,7 @@ function normalizeSuggestion(resultItem) {
 }
 
 async function downloadImageBuffer(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(15000) });
   if (!response.ok) {
     throw new Error(`Failed to download image (${response.status}): ${url}`);
   }
@@ -110,9 +134,66 @@ async function identifyWithPlantNet({ imageBuffers, organs }) {
   const response = await axios.post(endpoint, formData, {
     headers: formData.getHeaders(),
     maxBodyLength: Infinity,
+    timeout: 30000,
+    validateStatus: () => true,
   });
 
+  if (response.status < 200 || response.status >= 300) {
+    const { plantNetFailure } = await import('./tree_photo_validation.mjs');
+    throw plantNetFailure(response.status);
+  }
   return response.data;
+}
+
+// Identifies a single photo via Pl@ntNet, then optionally fuses the result
+// with a self-hosted bark/trunk classifier (see bark_species_classifier.mjs
+// and bark_classifier_service/). Fusion only runs for single-image calls —
+// the client already analyzes one photo per request — and is a no-op
+// whenever BARK_CLASSIFIER_URL is unset or the service is unavailable, so
+// this always degrades gracefully to today's Pl@ntNet-only behavior.
+//
+// Pl@ntNet signals "no match" by throwing (not a 200 response), which is
+// also the main failure mode for bark photos it can't recognize at all —
+// so that specific, otherwise-safe-to-retry error is also eligible for
+// rescue here. Any other error (outages, rate limits) still fails closed
+// immediately, exactly as before this fusion existed.
+async function identifySpeciesForImages({ imageBuffers, organs }) {
+  const barkClassifierUrl = process.env.BARK_CLASSIFIER_URL;
+  const canUseBark = Boolean(barkClassifierUrl) && imageBuffers.length === 1;
+
+  let suggestions = [];
+  let bestMatchName = null;
+  let plantNetError = null;
+  try {
+    const plantNetResponse = await identifyWithPlantNet({ imageBuffers, organs });
+    const rawResults = Array.isArray(plantNetResponse.results) ? plantNetResponse.results : [];
+    suggestions = rawResults.slice(0, 5).map(normalizeSuggestion)
+      .filter((item) => item.scientificName || item.commonNames.length > 0);
+    bestMatchName = plantNetResponse.bestMatch || null;
+  } catch (error) {
+    if (!canUseBark || error?.code !== 'no_match') throw error;
+    plantNetError = error;
+  }
+
+  if (canUseBark) {
+    const { classifyBark, fuseBarkSuggestions } = await import('./bark_species_classifier.mjs');
+    const predictions = await classifyBark({
+      imageBuffer: imageBuffers[0],
+      baseUrl: barkClassifierUrl,
+      timeoutMs: Number(process.env.BARK_CLASSIFIER_TIMEOUT_MS) || 8000,
+    });
+    const fused = fuseBarkSuggestions(suggestions, predictions, {
+      matchDropdownLabel,
+      scientificNameForLabel: scientificNameForDropdownLabel,
+    });
+    // Pl@ntNet found nothing and the bark classifier couldn't rescue it
+    // either: preserve the original no_match error exactly as before,
+    // rather than silently returning an empty "success".
+    if (plantNetError && fused.length === 0) throw plantNetError;
+    suggestions = fused;
+  }
+
+  return { suggestions, bestMatchName };
 }
 
 async function verifyAuth(req) {
@@ -302,19 +383,10 @@ identifyApp.post('/', async (req, res) => {
       imageUrls.map((url) => downloadImageBuffer(url.trim()))
     );
 
-    const plantNetResponse = await identifyWithPlantNet({
+    const { suggestions, bestMatchName } = await identifySpeciesForImages({
       imageBuffers,
       organs,
     });
-
-    const rawResults = Array.isArray(plantNetResponse.results)
-      ? plantNetResponse.results
-      : [];
-
-    const suggestions = rawResults
-      .slice(0, 5)
-      .map(normalizeSuggestion)
-      .filter((item) => item.scientificName || item.commonNames.length > 0);
 
     const bestMatch = suggestions.length > 0 ? suggestions[0] : null;
 
@@ -323,16 +395,63 @@ identifyApp.post('/', async (req, res) => {
       bestMatch,
       evidencePhotoUrls: imageUrls,
       identifiedAt: new Date().toISOString(),
-      bestMatchName: plantNetResponse.bestMatch || null,
+      bestMatchName,
     });
   } catch (err) {
-    console.error('identifySpecies error:', err);
+    console.error('identifySpecies error:', err.code || err.name);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({
-      error: 'Species identification failed',
-      details: String(err.message || err),
+      code: err.code || 'service_unavailable',
+      message: err.statusCode === 422 ? err.message : 'Photo analysis is unavailable. Please try again.',
     });
   }
 });
 
 exports.identifySpecies = functions.https.onRequest(identifyApp);
+
+const validatePhotosApp = express();
+validatePhotosApp.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+  res.set('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  return next();
+});
+validatePhotosApp.use(express.json({ limit: '32kb' }));
+validatePhotosApp.post('/', async (req, res) => {
+  try {
+    const decoded = await verifyAuth(req);
+    const {
+      parseOnSiteEvidence, receiptFields, validateEachPhoto, validatePhotoUrls,
+    } = await import('./tree_photo_validation.mjs');
+    const imageUrls = req.body?.imageUrls;
+    validatePhotoUrls(imageUrls, process.env.CLOUDINARY_CLOUD_NAME);
+    const { captures, treeLocation } = parseOnSiteEvidence(req.body, imageUrls);
+    const result = await validateEachPhoto(imageUrls, async (url) => {
+      const buffer = await downloadImageBuffer(url);
+      const { suggestions } = await identifySpeciesForImages({
+        imageBuffers: [buffer], organs: ['auto'],
+      });
+      return suggestions;
+    }, { onSite: captures, treeLocation });
+    const receipt = admin.firestore().collection('treePhotoValidations').doc();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await receipt.set(receiptFields({
+      uid: decoded.uid, imageUrls, expiresAt, result, treeLocation,
+    }));
+    return res.json({
+      validationId: receipt.id, evidencePhotoUrls: imageUrls,
+      expiresAt: expiresAt.toISOString(),
+      speciesVerification: result.speciesVerification,
+      unverifiedPhotoIndexes: result.unverifiedIndexes,
+    });
+  } catch (err) {
+    console.error('validateTreePhotos failed:', err.code || err.name);
+    return res.status(err.statusCode || 503).json({
+      code: err.code || 'service_unavailable',
+      message: err.statusCode === 422 ? err.message : 'Photo validation is unavailable. Please try again.',
+      ...(Number.isInteger(err.photoIndex) ? { photoIndex: err.photoIndex } : {}),
+    });
+  }
+});
+exports.validateTreePhotos = functions.https.onRequest(validatePhotosApp);

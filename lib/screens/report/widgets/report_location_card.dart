@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_tokens.dart';
+import '../../../models/report_location.dart';
 import '../../../widgets/section_widgets.dart';
 
 class ReportLocationCard extends StatelessWidget {
@@ -15,6 +16,10 @@ class ReportLocationCard extends StatelessWidget {
     required this.hasCoordinates,
     required this.onRefreshGps,
     required this.onPickOnMap,
+    this.source = ReportLocationSource.unknown,
+    this.accuracyMeters,
+    this.isOutsideBoundary = false,
+    this.enabled = true,
   });
 
   final TextEditingController barangayController;
@@ -25,6 +30,18 @@ class ReportLocationCard extends StatelessWidget {
   final bool hasCoordinates;
   final VoidCallback onRefreshGps;
   final VoidCallback onPickOnMap;
+
+  /// Where the current coordinates came from (GPS, map pick, ...), shown as
+  /// a provenance chip so the user knows what they're submitting.
+  final ReportLocationSource source;
+
+  /// Horizontal accuracy of the current fix in meters, when known.
+  final double? accuracyMeters;
+
+  /// True when the last resolved fix fell outside the Baliwag boundary and
+  /// was rejected; prompts the user towards the map picker instead.
+  final bool isOutsideBoundary;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -38,16 +55,22 @@ class ReportLocationCard extends StatelessWidget {
             subtitle: 'Use GPS or pin the exact spot on the map',
           ),
           const SizedBox(height: AppSpacing.md),
-          _LocationStatus(isFetching: isFetching, hasCoordinates: hasCoordinates),
+          _LocationStatus(
+            isFetching: isFetching,
+            hasCoordinates: hasCoordinates,
+            source: source,
+            accuracyMeters: accuracyMeters,
+            isOutsideBoundary: isOutsideBoundary,
+          ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Expanded(
                 child: Semantics(
                   label: 'Use GPS to get current location',
-                  enabled: !isFetching,
+                  enabled: enabled && !isFetching,
                   child: OutlinedButton.icon(
-                    onPressed: isFetching ? null : onRefreshGps,
+                    onPressed: !enabled || isFetching ? null : onRefreshGps,
                     icon: const Icon(Icons.my_location, size: 18),
                     label: const Text('Use GPS'),
                   ),
@@ -57,9 +80,8 @@ class ReportLocationCard extends StatelessWidget {
               Expanded(
                 child: Semantics(
                   label: 'Pick location on the map',
-                  enabled: !isFetching,
                   child: OutlinedButton.icon(
-                    onPressed: isFetching ? null : onPickOnMap,
+                    onPressed: enabled ? onPickOnMap : null,
                     icon: const Icon(Icons.map_outlined, size: 18),
                     label: const Text('Pick on map'),
                   ),
@@ -102,28 +124,59 @@ class ReportLocationCard extends StatelessWidget {
 }
 
 class _LocationStatus extends StatelessWidget {
-  const _LocationStatus({required this.isFetching, required this.hasCoordinates});
+  const _LocationStatus({
+    required this.isFetching,
+    required this.hasCoordinates,
+    required this.source,
+    required this.accuracyMeters,
+    required this.isOutsideBoundary,
+  });
 
   final bool isFetching;
   final bool hasCoordinates;
+  final ReportLocationSource source;
+  final double? accuracyMeters;
+  final bool isOutsideBoundary;
 
   @override
   Widget build(BuildContext context) {
     final Color color;
     final IconData icon;
     final String text;
-    if (isFetching) {
+    final bool showSpinner;
+
+    if (isOutsideBoundary) {
+      color = Colors.orange.shade800;
+      icon = Icons.warning_amber_outlined;
+      text = 'Outside Baliwag — pick the exact spot on the map';
+      showSpinner = false;
+    } else if (isFetching && !hasCoordinates) {
       color = AppColors.textGrey;
       icon = Icons.gps_not_fixed;
       text = 'Finding your location...';
+      showSpinner = true;
     } else if (hasCoordinates) {
       color = AppColors.statusApproved;
       icon = Icons.check_circle_outline;
-      text = 'Location set';
+      final level = accuracyLevelFor(accuracyMeters);
+      final accuracySuffix = accuracyMeters != null
+          ? ' · ±${accuracyMeters!.round()} m'
+          : '';
+      final refiningSuffix = isFetching ? ' · refining…' : '';
+      final approximateNote = source == ReportLocationSource.manual
+          ? ''
+          : level == LocationAccuracyLevel.precise
+          ? ''
+          : level == LocationAccuracyLevel.poor
+          ? ' (low accuracy)'
+          : ' (approximate)';
+      text = '${source.label}$accuracySuffix$approximateNote$refiningSuffix';
+      showSpinner = isFetching;
     } else {
       color = Colors.orange.shade800;
       icon = Icons.info_outline;
       text = 'Location not set yet';
+      showSpinner = false;
     }
 
     return Container(
@@ -138,7 +191,7 @@ class _LocationStatus extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (isFetching)
+          if (showSpinner)
             const SizedBox(
               width: 16,
               height: 16,

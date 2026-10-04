@@ -10,6 +10,7 @@ import '../../widgets/address_fields.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../../widgets/form_validators.dart';
 import '../../services/cloudinary_image_service.dart';
 import '../../services/organization_registration_service.dart';
@@ -624,6 +625,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        const Center(child: AppBrandLogos()),
+                        const SizedBox(height: 20),
                         const Text(
                           'Create an Account',
                           style: TextStyle(

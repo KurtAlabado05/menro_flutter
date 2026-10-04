@@ -76,7 +76,7 @@ class QuickActionsGrid extends StatelessWidget {
   }
 }
 
-class _QuickActionTile extends StatelessWidget {
+class _QuickActionTile extends StatefulWidget {
   const _QuickActionTile({
     required this.title,
     required this.icon,
@@ -94,49 +94,80 @@ class _QuickActionTile extends StatelessWidget {
   final String badgeNoun;
 
   @override
+  State<_QuickActionTile> createState() => _QuickActionTileState();
+}
+
+class _QuickActionTileState extends State<_QuickActionTile> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final semanticLabel = badgeCount > 0
-        ? '$title, $badgeCount $badgeNoun${badgeCount == 1 ? '' : 's'}'
-        : title;
+    final semanticLabel = widget.badgeCount > 0
+        ? '${widget.title}, ${widget.badgeCount} ${widget.badgeNoun}${widget.badgeCount == 1 ? '' : 's'}'
+        : widget.title;
 
     return Semantics(
       button: true,
       label: semanticLabel,
       excludeSemantics: true,
-      child: Material(
-        color: AppColors.cardWhite,
-        borderRadius: AppRadius.lgAll,
-        child: InkWell(
-          onTap: onTap,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.97 : 1,
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOutCubic,
+        child: Material(
+          color: AppColors.cardWhite,
           borderRadius: AppRadius.lgAll,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              vertical: AppSpacing.lg,
-              horizontal: AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.lgAll,
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
-              children: [
-                Badge(
-                  isLabelVisible: badgeCount > 0,
-                  label: Text(badgeCount > 9 ? '9+' : '$badgeCount'),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (highlighted) {
+              if (_isPressed != highlighted) {
+                setState(() => _isPressed = highlighted);
+              }
+            },
+            borderRadius: AppRadius.lgAll,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.lg,
+                horizontal: AppSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.lgAll,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryDark.withValues(alpha: 0.045),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: Column(
+                children: [
+                  Badge(
+                    isLabelVisible: widget.badgeCount > 0,
+                    label: Text(widget.badgeCount > 9 ? '9+' : '${widget.badgeCount}'),
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: widget.color.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(widget.icon, color: widget.color, size: 26),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    widget.title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/onboarding_prefs_service.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../auth/login_screen.dart';
 import '../auth/role_home.dart';
 import 'onboarding_screen.dart';
@@ -83,13 +84,7 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/images/ui/baliwag_seal.png',
-              height: 88,
-              width: 88,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const SizedBox(height: 88),
-            ),
+            const AppBrandLogos(),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),
           ],

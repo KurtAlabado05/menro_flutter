@@ -6,9 +6,11 @@ import '../../providers/auth_provider.dart' as app_auth_provider;
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../../services/onboarding_prefs_service.dart';
 import 'register_screen.dart';
 import 'role_home.dart';
+import '../onboarding/onboarding_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -178,28 +180,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            'assets/images/ui/baliwag_seal.png',
-                            height: 120,
-                            width: 120,
-                            fit: BoxFit.contain,
-                            semanticLabel: 'Baliwag city seal',
-                          ),
-                        ),
+                      const Center(
+                        child: AppBrandLogos(size: 112),
                       ),
                       const SizedBox(height: 20),
                       Text(
@@ -283,6 +265,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const OnboardingScreen(
+                                    isReplay: true,
+                                  ),
+                                ),
+                              ),
+                        child: const Text('View app introduction'),
                       ),
                     ],
                   ),

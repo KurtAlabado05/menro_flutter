@@ -5,6 +5,7 @@ import '../../core/constants/app_tokens.dart';
 import '../../models/account_type.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../map/map_screen.dart';
 import '../notifications/notification_screen.dart';
@@ -78,13 +79,15 @@ class _MainScreenState extends State<MainScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          toolbarHeight: 72,
+          toolbarHeight: 120,
           centerTitle: false,
           titleSpacing: AppSpacing.xl - AppSpacing.xs,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const AppBrandLogos(size: 44, gap: 8),
+              const SizedBox(height: 4),
               Text(
                 _currentIndex == 0
                     ? '${_greeting()}, $shortName'
@@ -125,37 +128,48 @@ class _MainScreenState extends State<MainScreen> {
           actions: const [_HeaderActions(), SizedBox(width: AppSpacing.sm)],
         ),
         body: IndexedStack(index: _currentIndex, children: _screens),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) =>
-              setState(() => _currentIndex = index),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Dashboard',
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.sm,
+            AppSpacing.xs,
+            AppSpacing.sm,
+            AppSpacing.sm,
+          ),
+          child: ClipRRect(
+            borderRadius: AppRadius.pillAll,
+            child: NavigationBar(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (index) =>
+                  setState(() => _currentIndex = index),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.add_circle_outline),
+                  selectedIcon: Icon(Icons.add_circle),
+                  label: 'Report',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.nature_outlined),
+                  selectedIcon: Icon(Icons.nature),
+                  label: 'Projects',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.note_add_outlined),
+                  selectedIcon: Icon(Icons.note_add),
+                  label: 'Permits',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline),
+                  selectedIcon: Icon(Icons.person),
+                  label: 'Profile',
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.add_circle_outline),
-              selectedIcon: Icon(Icons.add_circle),
-              label: 'Report',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.nature_outlined),
-              selectedIcon: Icon(Icons.nature),
-              label: 'Projects',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.note_add_outlined),
-              selectedIcon: Icon(Icons.note_add),
-              label: 'Permits',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+          ),
         ),
       ),
     );

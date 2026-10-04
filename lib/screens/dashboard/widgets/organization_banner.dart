@@ -19,12 +19,14 @@ class OrganizationActiveBanner extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: AppColors.statusApproved.fade(0.08),
-          border: Border.all(color: AppColors.statusApproved.fade(0.24)),
           borderRadius: AppRadius.mdAll,
         ),
         child: Row(
           children: [
-            const Icon(Icons.verified_outlined, color: AppColors.statusApproved),
+            const Icon(
+              Icons.verified_outlined,
+              color: AppColors.statusApproved,
+            ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -71,7 +73,6 @@ class OrganizationPendingCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.statusPending.fade(0.08),
-        border: Border.all(color: AppColors.statusPending.fade(0.3)),
         borderRadius: AppRadius.lgAll,
       ),
       child: Column(

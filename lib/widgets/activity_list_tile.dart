@@ -32,10 +32,11 @@ class ActivityListTile extends StatelessWidget {
     return Material(
       color: AppColors.cardWhite,
       shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.mdAll,
-        side: BorderSide(color: Colors.grey.shade200),
+        borderRadius: AppRadius.lgAll,
       ),
       clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      shadowColor: AppColors.primaryDark.withValues(alpha: 0.06),
       child: InkWell(
         onTap: onTap,
         child: Padding(

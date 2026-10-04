@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inspection_provider.dart';
+import '../../widgets/animated_gradient_fab.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../auth/login_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../profile/profile_screen.dart';
@@ -17,8 +19,7 @@ class InspectionOfficerShell extends StatefulWidget {
   const InspectionOfficerShell({super.key});
 
   @override
-  State<InspectionOfficerShell> createState() =>
-      _InspectionOfficerShellState();
+  State<InspectionOfficerShell> createState() => _InspectionOfficerShellState();
 }
 
 class _InspectionOfficerShellState extends State<InspectionOfficerShell> {
@@ -60,7 +61,15 @@ class _InspectionOfficerShellState extends State<InspectionOfficerShell> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_titles[_currentIndex]),
+        toolbarHeight: 104,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppBrandLogos(size: 44, gap: 8),
+            const SizedBox(height: 4),
+            Text(_titles[_currentIndex]),
+          ],
+        ),
         backgroundColor: AppColors.primary,
         automaticallyImplyLeading: false,
         actions: [
@@ -79,6 +88,18 @@ class _InspectionOfficerShellState extends State<InspectionOfficerShell> {
         ],
       ),
       body: IndexedStack(index: _currentIndex, children: _screens),
+      floatingActionButton: _currentIndex == 1
+          ? AnimatedGradientFAB(
+              onPressed: () {
+                // TODO: Navigate to new inspection creation flow
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('New inspection creation')),
+                );
+              },
+              icon: Icons.add_outlined,
+              tooltip: 'Create new inspection',
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),

@@ -7,6 +7,8 @@ import '../../models/inspection_application_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inspection_provider.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/photo_gallery_section.dart';
+import '../../widgets/state_views.dart';
 import '../../widgets/status_badge.dart';
 import 'case_documentation_screen.dart';
 
@@ -219,9 +221,7 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
                   _DocumentsSection(documents: application.documents),
                   if (application.type == 'tree_cutting_permit') ...[
                     const SizedBox(height: 16),
-                    _PermitDetailsSection(
-                      permitData: application.raw,
-                    ),
+                    _PermitDetailsSection(permitData: application.raw),
                     const SizedBox(height: 16),
                     FilledButton.tonalIcon(
                       onPressed: () => Navigator.of(context).push(
@@ -243,6 +243,25 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
                     child: _DetailsGrid(findings: findings),
                   ),
                   const SizedBox(height: 16),
+                  if (application.documents.isNotEmpty)
+                    PhotoGallerySection(
+                      documents: application.documents
+                          .map(
+                            (doc) => PhotoDocument(
+                              url: doc.url,
+                              name: doc.name,
+                              kind: doc.name.toLowerCase().contains('tree')
+                                  ? 'tree-picture'
+                                  : 'document',
+                              verified: doc.verified,
+                            ),
+                          )
+                          .toList(),
+                      title: 'Application Documents',
+                      subtitle: 'Attached tree photos and supporting documents',
+                    ),
+                  if (application.documents.isNotEmpty)
+                    const SizedBox(height: 16),
                   _StatusHistorySection(
                     entries: application.raw['statusHistory'] is List
                         ? application.raw['statusHistory'] as List
@@ -289,20 +308,11 @@ class _InspectionDetailScreenState extends State<InspectionDetailScreen> {
                   ),
                   if (_mutationError != null) ...[
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.shade100),
-                      ),
-                      child: Text(
-                        _mutationError!,
-                        style: TextStyle(
-                          color: Colors.red.shade700,
-                          fontSize: 12,
-                        ),
-                      ),
+                    ErrorState(
+                      title: 'Failed to save findings',
+                      subtitle: _mutationError,
+                      onRetry: () => setState(() => _mutationError = null),
+                      retryLabel: 'Dismiss',
                     ),
                   ],
                 ],
@@ -888,8 +898,11 @@ class _PermitDetailsSection extends StatelessWidget {
     final numberOfTrees = permitData['numberOfTrees'] ?? 0;
     final reasonForCutting = permitData['reasonForCutting'] ?? '';
     final locationCategory = permitData['locationCategory'] ?? '';
-    final treePictures = List<String>.from(permitData['treePicturesPaths'] ?? []);
-    final speciesId = permitData['speciesIdentification'] as Map<String, dynamic>?;
+    final treePictures = List<String>.from(
+      permitData['treePicturesPaths'] ?? [],
+    );
+    final speciesId =
+        permitData['speciesIdentification'] as Map<String, dynamic>?;
 
     return _SectionCard(
       title: 'Permit Details',
@@ -901,6 +914,38 @@ class _PermitDetailsSection extends StatelessWidget {
           _DetailRow(label: 'Number of Trees', value: numberOfTrees.toString()),
           _DetailRow(label: 'Reason for Cutting', value: reasonForCutting),
           _DetailRow(label: 'Location Category', value: locationCategory),
+          if (permitData['speciesVerification'] == 'unverified_onsite') ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade300),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.fact_check_outlined,
+                    color: Colors.orange.shade800,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Species unverified: '
+                      '${(permitData['unverifiedTreePhotoUrls'] as List?)?.length ?? 0} '
+                      'tree photo(s) could not be identified (e.g. leafless or dead tree) '
+                      'and were accepted as on-site photos near the pinned location. '
+                      'Confirm the species during inspection.',
+                      style: TextStyle(color: Colors.orange.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (speciesId != null && speciesId.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Text(
@@ -923,9 +968,7 @@ class _PermitDetailsSection extends StatelessWidget {
                   errorBuilder: (_, __, ___) => Container(
                     height: 200,
                     color: Colors.grey[200],
-                    child: const Center(
-                      child: Icon(Icons.image_not_supported),
-                    ),
+                    child: const Center(child: Icon(Icons.image_not_supported)),
                   ),
                 ),
               ),
@@ -990,10 +1033,7 @@ class _DetailRow extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textGrey,
-              ),
+              style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
             ),
           ),
           Expanded(

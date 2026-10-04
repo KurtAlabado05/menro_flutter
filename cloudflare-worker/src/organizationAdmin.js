@@ -99,6 +99,7 @@ function documentsUrl(projectId, suffix = "") {
 }
 
 function encodeFirestoreValue(value) {
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
   if (value === null) return { nullValue: "NULL_VALUE" };
   if (typeof value === "string") return { stringValue: value };
   if (typeof value === "boolean") return { booleanValue: value };
@@ -170,7 +171,7 @@ async function authorizedFetch(url, accessToken, options = {}) {
   return response;
 }
 
-async function getGoogleAccessToken(env) {
+export async function getGoogleAccessToken(env) {
   let serviceAccount;
   try {
     serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON || "");
@@ -213,7 +214,7 @@ async function getGoogleAccessToken(env) {
   return tokenResponse.access_token;
 }
 
-async function verifyFirebaseIdToken(request, env) {
+export async function verifyFirebaseIdToken(request, env) {
   const authorization = request.headers.get("Authorization") || "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
   if (!token) throw apiError(401, "unauthenticated", "Sign in to continue.");
@@ -296,7 +297,7 @@ async function lookupAuthUsers(projectId, accessToken, uids) {
   return new Map((result.users || []).map((user) => [user.localId, user]));
 }
 
-async function commitUpdates(projectId, accessToken, updates) {
+export async function commitUpdates(projectId, accessToken, updates) {
   const writes = updates.map(({ path, updateTime, exists, fields, transforms = [] }) => ({
     update: {
       name: documentName(projectId, path),

@@ -3,11 +3,14 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/app_brand_logos.dart';
 import '../auth/login_screen.dart';
 import 'onboarding_slide_data.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.isReplay = false});
+
+  final bool isReplay;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -26,6 +29,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToLogin() {
+    if (widget.isReplay) {
+      Navigator.pop(context);
+      return;
+    }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -50,23 +57,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Opacity(
-                  opacity: _isLastPage ? 0 : 1,
-                  child: TextButton(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                children: [
+                  const AppBrandLogos(size: 44, gap: 8),
+                  const Spacer(),
+                  TextButton(
                     onPressed: _isLastPage ? null : _goToLogin,
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(color: AppColors.textGrey),
-                    ),
+                    child: Text(widget.isReplay ? 'Close' : 'Skip'),
                   ),
-                ),
+                ],
               ),
             ),
             Expanded(
@@ -110,13 +111,15 @@ class _OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageSize = (MediaQuery.of(context).size.width * 0.78).clamp(
-      260.0,
-      360.0,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageSize = (constraints.maxWidth * 0.7).clamp(160.0, 300.0);
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SizedBox(
@@ -127,7 +130,7 @@ class _OnboardingPage extends StatelessWidget {
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => Container(
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -155,7 +158,11 @@ class _OnboardingPage extends StatelessWidget {
             style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
           ),
         ],
-      ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

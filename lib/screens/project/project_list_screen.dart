@@ -9,6 +9,7 @@ import '../../providers/project_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/project_card.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/rounded_tab_bar.dart';
 
 import 'project_details_screen.dart';
 
@@ -206,19 +207,13 @@ class _ProjectListScreenState extends State<ProjectListScreen>
                   .where((p) => p.status == 'completed')
                   .length;
 
-              return Container(
-                color: Colors.white,
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: AppColors.textGrey,
-                  indicatorColor: AppColors.primary,
-                  tabs: [
-                    Tab(text: 'Ongoing ($active)'),
-                    Tab(text: 'Not Started ($pending)'),
-                    Tab(text: 'Done ($completed)'),
-                  ],
-                ),
+              return RoundedTabBar(
+                controller: _tabController,
+                tabs: [
+                  Tab(text: 'Ongoing ($active)'),
+                  Tab(text: 'Not Started ($pending)'),
+                  Tab(text: 'Done ($completed)'),
+                ],
               );
             },
           ),

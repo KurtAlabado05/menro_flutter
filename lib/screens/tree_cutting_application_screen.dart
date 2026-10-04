@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -9,10 +10,15 @@ import '../core/constants/app_colors.dart';
 import '../core/constants/app_tokens.dart';
 import '../providers/auth_provider.dart' as app_auth_provider;
 import '../services/cloudinary_image_service.dart';
+import '../services/location/device_location_service.dart';
+import '../services/tree_species_identification_service.dart';
+import '../models/photo_identification_error.dart';
+import '../models/report_location.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/image_source_sheet.dart';
 import '../widgets/section_widgets.dart';
 import '../widgets/tree_species_identify_sheet.dart';
+import 'report/report_camera_screen.dart';
 import 'report/report_location_picker.dart';
 import 'tree_cutting/tree_cutting_form_model.dart';
 import 'tree_cutting/widgets/permit_applicant_step.dart';
@@ -24,7 +30,30 @@ import 'tree_cutting/widgets/permit_trees_step.dart';
 enum _DocumentSource { camera, gallery, file }
 
 class TreeCuttingApplicationScreen extends StatefulWidget {
-  const TreeCuttingApplicationScreen({super.key});
+  const TreeCuttingApplicationScreen({
+    super.key,
+    this.identificationService = const TreeSpeciesIdentificationService(),
+    this.model,
+    this.submitApplication,
+    this.currentUid,
+    this.imagePicker,
+    this.cloudinary,
+    this.captureOnSitePhoto,
+    this.onSiteLocation,
+  });
+
+  final TreeSpeciesIdentificationService identificationService;
+  final TreeCuttingFormModel? model;
+  final Future<void> Function(Map<String, dynamic>)? submitApplication;
+  final String? Function()? currentUid;
+  final ImagePicker? imagePicker;
+  final CloudinaryImageService? cloudinary;
+
+  /// Live-camera capture for on-site photos; never a gallery picker.
+  final Future<XFile?> Function(BuildContext context)? captureOnSitePhoto;
+
+  /// Fresh GPS fix read right after an on-site capture.
+  final Future<LocationFix> Function()? onSiteLocation;
 
   @override
   State<TreeCuttingApplicationScreen> createState() =>
@@ -40,18 +69,23 @@ class _TreeCuttingApplicationScreenState
     'Review & Submit',
   ];
 
-  final TreeCuttingFormModel _model = TreeCuttingFormModel();
+  late final TreeCuttingFormModel _model =
+      widget.model ?? TreeCuttingFormModel();
   final GlobalKey<FormState> _applicantKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _treesKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _reviewKey = GlobalKey<FormState>();
   final ScrollController _scroll = ScrollController();
 
-  final CloudinaryImageService _cloudinary = const CloudinaryImageService(
-    cloudName: 'dfo5l4d4t',
-    uploadPreset: 'flutter_upload_preset',
-  );
+  late final CloudinaryImageService _cloudinary =
+      widget.cloudinary ??
+      const CloudinaryImageService(
+        cloudName: 'dfo5l4d4t',
+        uploadPreset: 'flutter_upload_preset',
+      );
 
   int _step = 0;
+  bool _allowPop = false;
+  bool _confirmingExit = false;
 
   @override
   void initState() {
@@ -62,20 +96,23 @@ class _TreeCuttingApplicationScreenState
   @override
   void dispose() {
     _scroll.dispose();
-    _model.dispose();
+    if (widget.model == null) _model.dispose();
     super.dispose();
   }
 
   void _goToStep(int step) {
+    if (_model.busy) return;
     setState(() => _step = step);
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   Future<void> _confirmExit() async {
-    if (!_model.hasUserInput || _model.submitting) {
-      Navigator.of(context).pop();
+    if (_model.busy || _confirmingExit || _allowPop) return;
+    if (!_model.hasUserInput) {
+      await _leave();
       return;
     }
+    _confirmingExit = true;
     final discard = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -95,13 +132,25 @@ class _TreeCuttingApplicationScreenState
         ],
       ),
     );
-    if (discard == true && mounted) Navigator.of(context).pop();
+    _confirmingExit = false;
+    if (discard == true && mounted) await _leave();
+  }
+
+  Future<void> _leave() async {
+    if (!mounted || _allowPop) return;
+    setState(() => _allowPop = true);
+    // Rebuild PopScope before navigating; never pop from its blocked-pop callback.
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _openSpeciesIdentify() async {
     final result = await TreeSpeciesIdentifySheet.show(
       context,
       cloudinary: _cloudinary,
+      identificationService: widget.identificationService,
     );
     if (!mounted || result == null) return;
     final suggestion = result.bestMatch;
@@ -115,7 +164,7 @@ class _TreeCuttingApplicationScreenState
   }
 
   Future<void> _pickLocation() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
+    final result = await Navigator.push<ReportLocation>(
       context,
       MaterialPageRoute(
         builder: (_) => ReportLocationPickerScreen(
@@ -124,7 +173,7 @@ class _TreeCuttingApplicationScreenState
         ),
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     _model.setLocation(result);
   }
 
@@ -185,7 +234,7 @@ class _TreeCuttingApplicationScreenState
     PermitAttachment kind,
     ImageSource source,
   ) async {
-    final picked = await ImagePicker().pickImage(
+    final picked = await (widget.imagePicker ?? ImagePicker()).pickImage(
       source: source,
       imageQuality: 80,
       maxWidth: 1600,
@@ -195,6 +244,7 @@ class _TreeCuttingApplicationScreenState
     final bytes = await picked.readAsBytes();
     return _cloudinary.uploadImage(
       bytes: bytes,
+      timeout: const Duration(seconds: 60),
       fileName: _fileName(kind, picked.name),
     );
   }
@@ -222,13 +272,13 @@ class _TreeCuttingApplicationScreenState
         kind == PermitAttachment.treePhotos ||
         kind == PermitAttachment.contextPhotos;
 
+    _model.photoError = null;
+    _model.setUploading(kind);
+    var offerOnSite = false;
     try {
       String? url;
       if (isPhoto) {
-        final source = await showImageSourceSheet(
-          context,
-          title: 'Add Photo',
-        );
+        final source = await showImageSourceSheet(context, title: 'Add Photo');
         if (!mounted || source == null) return;
         url = await _pickAndUploadImage(kind, source);
       } else {
@@ -246,14 +296,173 @@ class _TreeCuttingApplicationScreenState
           _DocumentSource.file => await _pickAndUploadFile(kind),
         };
       }
-      if (url != null) _model.attach(kind, url);
-    } catch (_) {
+      if (!mounted || url == null) return;
+      if (kind == PermitAttachment.treePhotos) {
+        await widget.identificationService.validateTreePhotos([url]);
+        if (!mounted) return;
+      }
+      _model.attach(
+        kind,
+        url,
+        photoValidated: kind == PermitAttachment.treePhotos,
+      );
+    } catch (error, stack) {
+      debugPrint('Tree permit attachment failed: $error\n$stack');
       if (mounted) {
-        showAppSnackBar(
-          context,
-          'Upload failed. Check your connection and try again.',
-          type: AppMessageType.error,
+        final message = error is PhotoIdentificationException
+            ? error.message
+            : 'Upload failed. Check your connection and try again.';
+        _model.photoError = message;
+        showAppSnackBar(context, message, type: AppMessageType.error);
+        offerOnSite = kind == PermitAttachment.treePhotos &&
+            error is PhotoIdentificationException &&
+            error.allowsOnSiteFallback;
+      }
+    } finally {
+      if (mounted) _model.setUploading(null);
+    }
+    if (offerOnSite && mounted) await _offerOnSitePhoto();
+  }
+
+  Future<void> _offerOnSitePhoto() async {
+    final takePhoto = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tree has no leaves or is dead?'),
+        content: const Text(
+          'Leafless, dead, or cut trees are often impossible to identify from a photo. '
+          'You can take a live photo while standing at the tree you pinned. '
+          'Your location is checked against the pin, and MENRO will confirm the '
+          'species during the required site inspection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Try another photo'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Take on-site photo'),
+          ),
+        ],
+      ),
+    );
+    if (takePhoto == true && mounted) await _takeOnSitePhoto();
+  }
+
+  static const double _onSiteMaxAccuracyMeters = 50;
+  static const double _onSiteMaxDistanceMeters = 100;
+
+  Future<LocationFix> _deviceOnSiteFix() async {
+    try {
+      return await const DeviceLocationService().currentFix();
+    } catch (error) {
+      debugPrint('On-site GPS fix failed: $error');
+      throw const PhotoIdentificationException(
+        PhotoIdentificationFailure.onSiteLocationUnavailable,
+      );
+    }
+  }
+
+  /// Live capture at the tree for species that cannot be recognized. The
+  /// server still runs recognition and flags the permit for inspection only
+  /// when recognition is uncertain and the GPS fix matches the pinned tree.
+  Future<void> _takeOnSitePhoto() async {
+    if (_model.busy) return;
+    const kind = PermitAttachment.treePhotos;
+    _model.photoError = null;
+    try {
+      final treeLatitude = _model.latitude;
+      final treeLongitude = _model.longitude;
+      if (treeLatitude == null || treeLongitude == null) {
+        throw const PhotoIdentificationException(
+          PhotoIdentificationFailure.onSiteTreeNotPinned,
         );
+      }
+      final locate = widget.onSiteLocation ?? _deviceOnSiteFix;
+      if (widget.onSiteLocation == null) {
+        // Ask for location before the user takes the photo, not after.
+        final availability = await const DeviceLocationService()
+            .checkAvailability();
+        if (availability != LocationAvailability.available) {
+          throw const PhotoIdentificationException(
+            PhotoIdentificationFailure.onSiteLocationUnavailable,
+          );
+        }
+        if (!mounted) return;
+      }
+      _model.setUploading(kind);
+      final photo = await (widget.captureOnSitePhoto?.call(context) ??
+          Navigator.push<XFile>(
+            context,
+            MaterialPageRoute(builder: (_) => const ReportCameraScreen()),
+          ));
+      if (!mounted || photo == null) return;
+      final capturedAt = DateTime.now();
+      final fix = await locate();
+      if (!mounted) return;
+      if (fix.accuracyMeters > _onSiteMaxAccuracyMeters ||
+          capturedAt.difference(fix.timestamp).abs() >
+              const Duration(minutes: 2)) {
+        throw const PhotoIdentificationException(
+          PhotoIdentificationFailure.onSiteGpsUnreliable,
+        );
+      }
+      final distance = Geolocator.distanceBetween(
+        fix.latitude,
+        fix.longitude,
+        treeLatitude,
+        treeLongitude,
+      );
+      if (distance > _onSiteMaxDistanceMeters) {
+        throw const PhotoIdentificationException(
+          PhotoIdentificationFailure.onSiteTooFar,
+        );
+      }
+      final url = await _cloudinary.uploadImage(
+        bytes: await photo.readAsBytes(),
+        timeout: const Duration(seconds: 60),
+        fileName: _fileName(kind, photo.name),
+      );
+      if (!mounted) return;
+      final capture = OnSiteTreeCapture(
+        url: url,
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracyMeters: fix.accuracyMeters,
+        capturedAt: capturedAt,
+      );
+      final validation = await widget.identificationService.validateTreePhotos(
+        [url],
+        onSiteCaptures: [capture],
+        treeLatitude: treeLatitude,
+        treeLongitude: treeLongitude,
+      );
+      if (!mounted) return;
+      _model.attach(
+        kind,
+        url,
+        photoValidated: true,
+        onSiteCapture: capture,
+        speciesUnverified: validation.requiresInspection,
+      );
+      showAppSnackBar(
+        context,
+        validation.requiresInspection
+            ? 'On-site photo added. The species will be confirmed during the site inspection.'
+            : 'Photo added. The tree was recognized.',
+        type: validation.requiresInspection
+            ? AppMessageType.warning
+            : AppMessageType.success,
+      );
+    } catch (error, stack) {
+      debugPrint('On-site tree photo failed: $error\n$stack');
+      if (mounted) {
+        final message = error is PhotoIdentificationException
+            ? error.message
+            : 'Upload failed. Check your connection and try again.';
+        _model.photoError = message;
+        showAppSnackBar(context, message, type: AppMessageType.error);
       }
     } finally {
       if (mounted) _model.setUploading(null);
@@ -261,6 +470,7 @@ class _TreeCuttingApplicationScreenState
   }
 
   Future<void> _onContinue() async {
+    if (_model.busy) return;
     switch (_step) {
       case 0:
         if (!(_applicantKey.currentState?.validate() ?? false)) {
@@ -294,8 +504,20 @@ class _TreeCuttingApplicationScreenState
   );
 
   Future<void> _submit() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (_model.busy) return;
+    final problem = _model.validateDocuments();
+    if (problem != null || !_model.declarationChecked) {
+      showAppSnackBar(
+        context,
+        problem ?? 'Confirm the declaration before submitting.',
+        type: AppMessageType.warning,
+      );
+      return;
+    }
+    final uid = widget.currentUid != null
+        ? widget.currentUid!()
+        : FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
       showAppSnackBar(
         context,
         'Your session has expired. Please sign in again.',
@@ -305,28 +527,54 @@ class _TreeCuttingApplicationScreenState
     }
 
     _model.setSubmitting(true);
+    _model.photoError = null;
     try {
-      await FirebaseFirestore.instance.collection('tree_cutting_permits').doc().set(
-        _model.toFirestore(
-          uid: user.uid,
-          submittedAt: FieldValue.serverTimestamp(),
-          historyTimestamp: Timestamp.now(),
-        ),
+      final photos = List<String>.of(_model.treePhotoUrls);
+      final validation = await widget.identificationService.validateTreePhotos(
+        photos,
+        onSiteCaptures: [
+          for (final url in photos)
+            if (_model.onSiteTreeCaptures[url] case final capture?) capture,
+        ],
+        treeLatitude: _model.latitude,
+        treeLongitude: _model.longitude,
       );
+      if (!mounted) return;
+      _model.applyTreePhotoValidation(validation);
+      final data = _model.toFirestore(
+        uid: uid,
+        submittedAt: FieldValue.serverTimestamp(),
+        historyTimestamp: Timestamp.now(),
+      );
+      if (widget.submitApplication != null) {
+        await widget.submitApplication!(data);
+      } else {
+        await FirebaseFirestore.instance
+            .collection('tree_cutting_permits')
+            .doc()
+            .set(data);
+      }
       if (!mounted) return;
       showAppSnackBar(
         context,
         'Application submitted. You can track it under My Submissions.',
         type: AppMessageType.success,
       );
-      Navigator.of(context).pop();
-    } catch (_) {
+      await _leave();
+    } catch (error, stack) {
+      debugPrint('Tree permit submission failed: $error\n$stack');
       if (!mounted) return;
-      showAppSnackBar(
-        context,
-        'Could not submit your application. Check your connection and try again.',
-        type: AppMessageType.error,
-      );
+      final message = switch (error) {
+        PhotoIdentificationException() => error.message,
+        FirebaseException(code: 'permission-denied') =>
+          'The application was not accepted. Your draft is kept. Revalidate the photos and retry; if this continues, contact MENRO.',
+        FirebaseException(code: 'unauthenticated') =>
+          'Your session has expired. Your draft is kept. Sign in again before submitting.',
+        _ =>
+          'Could not submit your application. Your draft is kept. Check your connection and try again.',
+      };
+      _model.photoError = message;
+      showAppSnackBar(context, message, type: AppMessageType.error);
     } finally {
       if (mounted) _model.setSubmitting(false);
     }
@@ -340,7 +588,11 @@ class _TreeCuttingApplicationScreenState
       onIdentifySpecies: _openSpeciesIdentify,
       onPickLocation: _pickLocation,
     ),
-    2 => PermitDocumentsStep(model: _model, onUpload: _upload),
+    2 => PermitDocumentsStep(
+      model: _model,
+      onUpload: _upload,
+      onTakeOnSitePhoto: _takeOnSitePhoto,
+    ),
     _ => PermitReviewStep(
       model: _model,
       formKey: _reviewKey,
@@ -351,9 +603,13 @@ class _TreeCuttingApplicationScreenState
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _confirmExit();
+        if (!didPop) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _confirmExit();
+          });
+        }
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -365,24 +621,31 @@ class _TreeCuttingApplicationScreenState
             Expanded(
               child: SingleChildScrollView(
                 controller: _scroll,
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 640),
-                    child: _buildStep(),
+                    child: ListenableBuilder(
+                      listenable: _model,
+                      builder: (_, _) => AbsorbPointer(
+                        absorbing: _model.busy,
+                        child: _buildStep(),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            _BottomBar(
-              model: _model,
-              step: _step,
-              lastStep: _stepTitles.length - 1,
-              onBack: () => _goToStep(_step - 1),
-              onContinue: _onContinue,
-            ),
           ],
+        ),
+        bottomNavigationBar: _BottomBar(
+          model: _model,
+          step: _step,
+          lastStep: _stepTitles.length - 1,
+          onBack: () => _goToStep(_step - 1),
+          onContinue: _onContinue,
         ),
       ),
     );
@@ -414,6 +677,7 @@ class _BottomBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Center(
+            heightFactor: 1,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640),
               child: ListenableBuilder(
@@ -441,7 +705,9 @@ class _BottomBar extends StatelessWidget {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : Text(isLast ? 'Submit Application' : 'Continue'),
+                              : Text(
+                                  isLast ? 'Submit Application' : 'Continue',
+                                ),
                         ),
                       ),
                     ],

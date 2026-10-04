@@ -257,10 +257,10 @@ class OrdinancesScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.08),
+                        color: Colors.amber.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.amber.withOpacity(0.25),
+                          color: Colors.amber.withValues(alpha: 0.25),
                         ),
                       ),
                       child: const Text(

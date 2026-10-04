@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_tokens.dart';
 import '../../models/account_type.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/animations.dart';
 import 'widgets/application_readiness_card.dart';
 import 'widgets/ordinance_banner.dart';
 import 'widgets/organization_banner.dart';
@@ -94,12 +95,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         controller: widget.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        child: FadeInAnimation(
+          duration: const Duration(milliseconds: 420),
+          child: SlideInAnimation(
+            duration: const Duration(milliseconds: 420),
+            beginOffset: const Offset(0, 0.035),
+            curve: Curves.easeOutCubic,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 if (orgPending) ...[
                   OrganizationPendingCard(
                     isChecking: _isCheckingOrg,
@@ -131,8 +138,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: AppSpacing.xl),
                   const ApplicationReadinessCard(),
                 ],
-                const SizedBox(height: AppSpacing.lg),
-              ],
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

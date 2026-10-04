@@ -13,5 +13,12 @@ ADMIN_ORIGINS = "http://localhost:3000"
 # Optional PlantNet project (used in identify endpoint). Default in worker is `all`.
 # PLANTNET_PROJECT = "all"
 
+# Optional bark/trunk classifier fusion (see ../bark_classifier_service/README.md).
+# Leave unset to disable fusion with zero behavior change.
+# BARK_CLASSIFIER_URL = "https://bark-species-classifier-xxxxx.run.app"
+# BARK_CLASSIFIER_TIMEOUT_MS = "8000"
 
+[observability.logs]
+enabled = true
+invocation_logs = true
 

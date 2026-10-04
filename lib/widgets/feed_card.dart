@@ -197,7 +197,7 @@ class _FeedCardState extends State<FeedCard> {
                   decoration: BoxDecoration(
                     color: _currentImageIndex == i
                         ? AppColors.primary
-                        : Colors.white.withOpacity(0.7),
+                        : Colors.white.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -249,9 +249,9 @@ class _FeedCardState extends State<FeedCard> {
                           margin: const EdgeInsets.only(left: 6),
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.statusResolved.withOpacity(0.12),
+                            color: AppColors.statusResolved.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.statusResolved.withOpacity(0.3)),
+                            border: Border.all(color: AppColors.statusResolved.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

@@ -87,10 +87,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.05),
+                    color: AppColors.primary.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                     ),
                   ),
                   child: Column(
@@ -104,7 +104,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
                         decoration: BoxDecoration(
                           color: getStatusColor(
                             project.status,
-                          ).withOpacity(0.1),
+                          ).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(

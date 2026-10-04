@@ -273,11 +273,44 @@ service cloud.firestore {
       }
     }
 
+    function hasValidatedTreePhotos(data) {
+      let id = data.get('treePhotoValidationId', '');
+      let path = /databases/$(database)/documents/treePhotoValidations/$(id);
+      return id is string && id.size() > 0 && exists(path) &&
+        get(path).data.uid == request.auth.uid &&
+        get(path).data.accepted == true &&
+        get(path).data.expiresAt > request.time &&
+        data.get('uploadedPaths', {}).get('treePicturesPaths', []) is list &&
+        data.uploadedPaths.treePicturesPaths.size() > 0 &&
+        get(path).data.imageUrls == data.uploadedPaths.treePicturesPaths &&
+        hasMatchingSpeciesVerification(data, get(path).data);
+    }
+
+    // Leafless/dead trees may pass with on-site photos; the flag, the flagged
+    // photos and the pinned location must match the server-issued receipt.
+    function hasMatchingSpeciesVerification(data, receipt) {
+      let status = receipt.get('speciesVerification', 'verified');
+      return data.get('speciesVerification', 'verified') == status && (
+        status == 'verified' || (
+          status == 'unverified_onsite' &&
+          data.get('inspectionRequired', false) == true &&
+          data.get('unverifiedTreePhotoUrls', []) == receipt.unverifiedPhotoUrls &&
+          data.get('treeLatitude', null) == receipt.treeLatitude &&
+          data.get('treeLongitude', null) == receipt.treeLongitude
+        )
+      );
+    }
+
+    match /treePhotoValidations/{validationId} {
+      allow read, write: if false;
+    }
+
     match /tree_cutting_permits/{permitId} {
       allow get, list: if canReadWorkflow(resource.data);
       allow create: if signedIn() && (
         isAdmin() || (
           isWorkflowOwner(request.resource.data) &&
+          hasValidatedTreePhotos(request.resource.data) &&
           request.resource.data.get('status', 'pending') in ['pending', 'submitted']
         )
       );

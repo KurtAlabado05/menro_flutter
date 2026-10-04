@@ -1,5 +1,13 @@
 
-import { handleOrganizationAdminRequest } from './organizationAdmin.js';
+import {
+  handleOrganizationAdminRequest, verifyFirebaseIdToken,
+  getGoogleAccessToken, commitUpdates,
+} from './organizationAdmin.js';
+import {
+  MIN_PHOTO_CONFIDENCE, PhotoValidationError, parseOnSiteEvidence, plantNetFailure,
+  receiptFields, validateEachPhoto, validatePhotoUrls,
+} from '../../functions/tree_photo_validation.mjs';
+import { classifyBark, fuseBarkSuggestions } from '../../functions/bark_species_classifier.mjs';
 
 const DROPDOWN_ALIASES = {
   Mahogany: ['swietenia macrophylla', 'mahogany', 'big-leaf mahogany'],
@@ -9,6 +17,21 @@ const DROPDOWN_ALIASES = {
   Narra: ['pterocarpus indicus', 'narra', 'amboyna'],
   'Ipil-Ipil': ['leucaena leucocephala', 'ipil-ipil', 'ipil ipil', 'lead tree'],
   Coconut: ['cocos nucifera', 'coconut', 'niyog', 'coco palm'],
+  'White Lauan': ['shorea contorta', 'pentacme contorta', 'white lauan', 'white lauaan'],
+  Guijo: ['shorea guiso', 'guijo', 'red balau', 'red balan'],
+  Apitong: ['dipterocarpus grandiflorus', 'apitong', 'apiton'],
+  'Red Lauan': ['shorea negrosensis', 'rubroshorea negrosensis', 'red lauan'],
+  // "Mayapis" is applied regionally to two different Dipterocarpaceae genera
+  // in the field (Shorea palosapis and Anisoptera thurifera); both
+  // scientific-name aliases are listed so either resolves to this label.
+  Mayapis: ['shorea palosapis', 'rubroshorea palosapis', 'anisoptera thurifera', 'mayapis', 'palosapis'],
+  Tindalo: ['afzelia rhomboidea', 'pahudia rhomboidea', 'intsia rhomboidea', 'tindalo'],
+  Bolongeta: ['diospyros pilosanthera', 'bolongeta', 'bolong-eta'],
+  // Sources disagree on whether "Malaikmo" refers to Celtis philippensis or
+  // the congener Celtis luzonica; both are listed as aliases.
+  Malaikmo: ['celtis philippensis', 'celtis luzonica', 'malaikmo', 'malaitmo'],
+  Bayanti: ['aglaia rimosa', 'bayanti', 'bayati'],
+  Malatanglin: ['adenanthera pavonina', 'malatanglin'],
 };
 
 const OTHERS_LABEL = 'Others (Specify Variant Name)';
@@ -33,6 +56,16 @@ function matchDropdownLabel(scientificName, commonNames = []) {
   return OTHERS_LABEL;
 }
 
+// Used only to give a confident bark-only suggestion (see
+// identifySpeciesForImages/fuseBarkSuggestions) a real scientific name: the
+// first alias per dropdown label is always its canonical binomial name.
+function scientificNameForDropdownLabel(label) {
+  const [binomial] = DROPDOWN_ALIASES[label] || [];
+  if (!binomial) return '';
+  return binomial.charAt(0).toUpperCase() + binomial.slice(1);
+}
+
+
 function normalizeSuggestion(resultItem) {
   const species = resultItem.species || {};
   const scientificName =
@@ -50,16 +83,20 @@ function normalizeSuggestion(resultItem) {
 }
 
 async function downloadArrayBuffer(url) {
-  const response = await fetch(url);
+  // Workers supports manual redirects, not redirect: 'error'; reject 3xx below.
+  const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
   if (!response.ok) {
-    throw new Error(`Failed to download image (${response.status}): ${url}`);
+    throw new PhotoValidationError(503, 'photo_unavailable', 'Could not read the uploaded photo. Replace it and retry.');
   }
   return await response.arrayBuffer();
 }
 
 function getPlantNetApiKey(env) {
   const apiKey = env.PLANTNET_API_KEY;
-  if (!apiKey) throw new Error('PLANTNET_API_KEY is not configured.');
+  if (!apiKey) {
+    throw new PhotoValidationError(503, 'backend_not_ready',
+      'Photo validation is not configured. Please contact support.');
+  }
   return apiKey;
 }
 
@@ -79,14 +116,64 @@ async function identifyWithPlantNetFetch({ imageBuffers, organs, env }) {
   const response = await fetch(endpoint, {
     method: 'POST',
     body: formData,
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`PlantNet request failed (${response.status}): ${text}`);
+    throw plantNetFailure(response.status);
   }
 
   return await response.json();
+}
+
+// Identifies a single photo via Pl@ntNet, then optionally fuses the result
+// with a self-hosted bark/trunk classifier (see
+// functions/bark_species_classifier.mjs and bark_classifier_service/).
+// Fusion only runs for single-image calls — the client already analyzes one
+// photo per request — and is a no-op whenever env.BARK_CLASSIFIER_URL is
+// unset or the service is unavailable, so this always degrades gracefully
+// to Pl@ntNet-only behavior.
+//
+// Pl@ntNet signals "no match" by throwing (not a 200 response), which is
+// also the main failure mode for bark photos it can't recognize at all —
+// so that specific, otherwise-safe-to-retry error is also eligible for
+// rescue here. Any other error (outages, rate limits) still fails closed
+// immediately, exactly as before this fusion existed.
+async function identifySpeciesForImages({ imageBuffers, organs, env }) {
+  const canUseBark = Boolean(env.BARK_CLASSIFIER_URL) && imageBuffers.length === 1;
+
+  let suggestions = [];
+  let bestMatchName = null;
+  let plantNetError = null;
+  try {
+    const plantNetResponse = await identifyWithPlantNetFetch({ imageBuffers, organs, env });
+    const rawResults = Array.isArray(plantNetResponse.results) ? plantNetResponse.results : [];
+    suggestions = rawResults.slice(0, 5).map(normalizeSuggestion)
+      .filter((item) => item.scientificName || item.commonNames.length > 0);
+    bestMatchName = plantNetResponse.bestMatch || null;
+  } catch (error) {
+    if (!canUseBark || error?.code !== 'no_match') throw error;
+    plantNetError = error;
+  }
+
+  if (canUseBark) {
+    const predictions = await classifyBark({
+      imageBuffer: imageBuffers[0],
+      baseUrl: env.BARK_CLASSIFIER_URL,
+      timeoutMs: Number(env.BARK_CLASSIFIER_TIMEOUT_MS) || 8000,
+    });
+    const fused = fuseBarkSuggestions(suggestions, predictions, {
+      matchDropdownLabel,
+      scientificNameForLabel: scientificNameForDropdownLabel,
+    });
+    // Pl@ntNet found nothing and the bark classifier couldn't rescue it
+    // either: preserve the original no_match error exactly as before,
+    // rather than silently returning an empty "success".
+    if (plantNetError && fused.length === 0) throw plantNetError;
+    suggestions = fused;
+  }
+
+  return { suggestions, bestMatchName };
 }
 
 async function cloudinaryUploadPresetless({ env, folder, file }) {
@@ -145,10 +232,61 @@ function withCorsResponse(response, request) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    let validationStage = 'request';
 
     try {
       if (url.pathname.startsWith('/organization-admin/')) {
         return await handleOrganizationAdminRequest(request, env);
+      }
+
+      if (url.pathname === '/validateTreePhotos') {
+        if (request.method === 'OPTIONS') {
+          return new Response(null, { status: 204, headers: getCorsHeaders(request) });
+        }
+        if (request.method !== 'POST') {
+          throw new PhotoValidationError(405, 'method_not_allowed', 'Use POST.');
+        }
+        validationStage = 'authentication';
+        const uid = await verifyFirebaseIdToken(request, env);
+        validationStage = 'input';
+        const rawBody = await request.text();
+        if (new TextEncoder().encode(rawBody).length > 32000) {
+          throw new PhotoValidationError(413, 'invalid_photos', 'Too many photo attachments.');
+        }
+        let body;
+        try { body = JSON.parse(rawBody); } catch {
+          throw new PhotoValidationError(400, 'invalid_photos', 'Invalid photo request.');
+        }
+        const imageUrls = body.imageUrls;
+        validatePhotoUrls(imageUrls, env.CLOUDINARY_CLOUD_NAME);
+        const { captures, treeLocation } = parseOnSiteEvidence(body, imageUrls);
+        validationStage = 'recognition';
+        const result = await validateEachPhoto(imageUrls, async (imageUrl) => {
+          const image = await downloadArrayBuffer(imageUrl);
+          const { suggestions } = await identifySpeciesForImages({
+            imageBuffers: [image], organs: ['auto'], env,
+          });
+          return suggestions;
+        }, { onSite: captures, treeLocation });
+        const validationId = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        validationStage = 'receipt';
+        const token = await getGoogleAccessToken(env);
+        await commitUpdates(env.FIREBASE_PROJECT_ID, token, [{
+          path: `treePhotoValidations/${validationId}`,
+          fields: receiptFields({ uid, imageUrls, expiresAt, result, treeLocation }),
+        }]);
+        if (result.unverifiedIndexes.length) {
+          console.log(JSON.stringify({
+            level: 'info', event: 'photo_species_unverified_onsite',
+            photoIndexes: result.unverifiedIndexes,
+          }));
+        }
+        return withCorsResponse(Response.json({
+          validationId, evidencePhotoUrls: imageUrls, expiresAt: expiresAt.toISOString(),
+          speciesVerification: result.speciesVerification,
+          unverifiedPhotoIndexes: result.unverifiedIndexes,
+        }), request);
       }
 
       if (request.method === 'POST' && url.pathname.endsWith('/uploadEvidence')) {
@@ -221,18 +359,11 @@ export default {
 
         const imageBuffers = await Promise.all(imageUrls.map((u) => downloadArrayBuffer(u.trim())));
 
-        const plantNetResponse = await identifyWithPlantNetFetch({
+        const { suggestions, bestMatchName } = await identifySpeciesForImages({
           imageBuffers,
           organs,
           env,
         });
-
-        const rawResults = Array.isArray(plantNetResponse.results) ? plantNetResponse.results : [];
-
-        const suggestions = rawResults
-          .slice(0, 5)
-          .map(normalizeSuggestion)
-          .filter((item) => item.scientificName || item.commonNames.length > 0);
 
         const bestMatch = suggestions.length > 0 ? suggestions[0] : null;
 
@@ -243,7 +374,7 @@ export default {
               bestMatch,
               evidencePhotoUrls: imageUrls,
               identifiedAt: new Date().toISOString(),
-              bestMatchName: plantNetResponse.bestMatch || null,
+              bestMatchName,
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           ),
@@ -259,17 +390,36 @@ export default {
         request
       );
     } catch (err) {
+      // Do not return upstream payloads, internal configuration or credentials.
+      console.error(JSON.stringify({
+        event: 'photo_validation_failed',
+        stage: validationStage,
+        code: err?.code || err?.name || 'unknown',
+        status: err?.status || err?.statusCode || 503,
+        ...(Number.isInteger(err?.photoIndex) ? { photoIndex: err.photoIndex } : {}),
+        ...(err instanceof PhotoValidationError && err.code === 'low_confidence'
+          ? { confidence: err.confidence, requiredConfidence: MIN_PHOTO_CONFIDENCE } : {}),
+      }));
+      const storageFailure = url.pathname === '/validateTreePhotos' &&
+        validationStage === 'receipt';
+      const status = storageFailure ? 503 : err?.status || err?.statusCode || 503;
+      const code = storageFailure ? 'validation_storage_unavailable'
+        : err?.code || 'service_unavailable';
       return withCorsResponse(
         new Response(
           JSON.stringify({
-            error: 'Request failed',
-            details: String(err?.message || err),
+            code,
+            message: storageFailure
+              ? 'The validation result could not be saved. Please contact support or retry later.'
+              : code === 'unauthenticated' ? 'Sign in again to validate photos.'
+              : err instanceof PhotoValidationError ? err.message
+              : 'Photo analysis is unavailable. Please try again.',
+            ...(Number.isInteger(err?.photoIndex) ? { photoIndex: err.photoIndex } : {}),
           }),
-          { status: err?.statusCode || 500, headers: { 'Content-Type': 'application/json' } }
+          { status, headers: { 'Content-Type': 'application/json' } }
         ),
         request
       );
     }
   },
 };
-

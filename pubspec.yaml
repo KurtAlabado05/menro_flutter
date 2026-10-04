@@ -53,6 +53,11 @@ dependencies:
   google_maps_flutter: ^2.5.3
   shared_preferences: ^2.3.3
   smooth_page_indicator: ^1.2.1
+  exif: ^3.3.0
+  image: ^4.10.1
+  flutter_image_compress: ^2.5.1
+  camera: ^0.12.1
+  camera_windows: ^0.3.0
   
 dev_dependencies:
   flutter_test:
@@ -64,6 +69,28 @@ dev_dependencies:
   # package. See that file for information on deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/ui/ecomap_logo.png
+  adaptive_icon_background: "#F5F8F3"
+  adaptive_icon_foreground: assets/images/ui/ecomap_logo.png
+  remove_alpha_ios: true
+  background_color_ios: "#F5F8F3"
+  web:
+    generate: true
+    image_path: assets/images/ui/ecomap_logo.png
+    background_color: "#F5F8F3"
+    theme_color: "#2E7D32"
+  windows:
+    generate: true
+    image_path: assets/images/ui/ecomap_logo.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/images/ui/ecomap_logo.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -72,6 +99,9 @@ dev_dependencies:
 flutter:
   assets:
     - assets/images/ui/baliwag_seal.png 
+    - assets/images/ui/ecomap_logo.png
+    - assets/images/ui/ecomap_logo_display.png
+    - assets/images/ui/baliwag_seal_display.png
     - assets/maps/baliwag_boundary.geojson
 
     - assets/images/trees/structural_hazard.jpg
@@ -127,4 +157,3 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-

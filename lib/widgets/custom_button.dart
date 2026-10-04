@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_colors.dart';
 import '../core/constants/app_tokens.dart';
+import '../core/constants/gradient_utils.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;
@@ -8,6 +9,7 @@ class CustomButton extends StatelessWidget {
   final bool isOutlined;
   final bool isLoading;
   final IconData? icon;
+  final bool useGradient;
 
   const CustomButton({
     super.key,
@@ -16,12 +18,31 @@ class CustomButton extends StatelessWidget {
     this.isOutlined = false,
     this.isLoading = false,
     this.icon,
+    this.useGradient = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final VoidCallback? handler = isLoading ? null : onPressed;
     final shape = RoundedRectangleBorder(borderRadius: AppRadius.mdAll);
+
+    if (useGradient && !isOutlined) {
+      return SizedBox(
+        width: double.infinity,
+        height: AppSizes.buttonHeight,
+        child: Container(
+          decoration: GradientUtils.primaryGradientDecoration(radius: 8),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: handler,
+              borderRadius: AppRadius.mdAll,
+              child: Center(child: _buildChild(Colors.white)),
+            ),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       width: double.infinity,

@@ -233,10 +233,10 @@ class _TreeCuttingPermitDetailsScreenState
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.05),
+                      color: AppColors.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                       ),
                     ),
                     child: Column(
@@ -341,10 +341,10 @@ class _TreeCuttingPermitDetailsScreenState
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.05),
+                        color: AppColors.primary.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.15),
+                          color: AppColors.primary.withValues(alpha: 0.15),
                         ),
                       ),
                       child: Column(
@@ -649,11 +649,11 @@ class _TreeCuttingPermitDetailsScreenState
               width: isLatest ? 16 : 12,
               height: isLatest ? 16 : 12,
               decoration: BoxDecoration(
-                color: isLatest ? color : color.withOpacity(0.55),
+                color: isLatest ? color : color.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
                 border: isLatest
                     ? Border.all(
-                        color: color.withOpacity(0.25),
+                        color: color.withValues(alpha: 0.25),
                         width: 3.5,
                         strokeAlign: BorderSide.strokeAlignOutside,
                       )
@@ -664,7 +664,7 @@ class _TreeCuttingPermitDetailsScreenState
               Container(
                 width: 2,
                 height: 50,
-                color: isLatest ? color.withOpacity(0.3) : Colors.grey[200],
+                color: isLatest ? color.withValues(alpha: 0.3) : Colors.grey[200],
               ),
           ],
         ),

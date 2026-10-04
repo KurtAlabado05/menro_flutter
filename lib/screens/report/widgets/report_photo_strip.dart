@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_tokens.dart';
 import '../picked_image.dart';
+import '../../../services/media/report_photo_upload_queue.dart';
 
 class ReportPhotoStrip extends StatelessWidget {
   const ReportPhotoStrip({
@@ -10,12 +11,14 @@ class ReportPhotoStrip extends StatelessWidget {
     required this.images,
     required this.onAdd,
     required this.onRemove,
+    this.onRetry,
     this.enabled = true,
   });
 
   final List<PickedImage> images;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
+  final ValueChanged<int>? onRetry;
   final bool enabled;
 
   static const double _size = 96;
@@ -72,6 +75,7 @@ class ReportPhotoStrip extends StatelessWidget {
           }
 
           final bytes = images[index].bytes;
+          final upload = images[index].upload;
           return SizedBox(
             width: _size,
             child: Stack(
@@ -90,6 +94,48 @@ class ReportPhotoStrip extends StatelessWidget {
                           semanticLabel: 'Attached photo ${index + 1}',
                         ),
                 ),
+                if (upload != null)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: ColoredBox(
+                      color: Colors.black87,
+                      child: upload.status == ReportPhotoUploadStatus.failed
+                          ? TextButton(
+                              onPressed: enabled && onRetry != null
+                                  ? () => onRetry!(index)
+                                  : null,
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 32),
+                              ),
+                              child: Text(
+                                'Retry photo ${index + 1}',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                switch (upload.status) {
+                                  ReportPhotoUploadStatus.uploaded =>
+                                    'Uploaded',
+                                  ReportPhotoUploadStatus.uploading =>
+                                    'Uploading...',
+                                  ReportPhotoUploadStatus.queued => 'Queued',
+                                  _ => 'Removed',
+                                },
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
                 Positioned(
                   top: 0,
                   right: 0,

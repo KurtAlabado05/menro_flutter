@@ -8,6 +8,7 @@ import '../../core/constants/status_config.dart';
 import '../../widgets/activity_list_tile.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/rounded_tab_bar.dart';
 import '../report/report_details_screen.dart';
 import 'report_input_screen.dart';
 
@@ -160,11 +161,7 @@ class _ReportSubmissionsHubScreenState
         ),
         body: Column(
           children: [
-            const TabBar(
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textGrey,
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 3,
+            const RoundedTabBar(
               tabs: [Tab(text: 'Active'), Tab(text: 'Resolved')],
             ),
             Expanded(

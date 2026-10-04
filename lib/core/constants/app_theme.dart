@@ -95,7 +95,12 @@ class AppTheme {
         foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
-        scrolledUnderElevation: 2,
+        scrolledUnderElevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(AppRadius.lg),
+          ),
+        ),
         titleTextStyle: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
@@ -103,16 +108,26 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 1,
+        elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
         color: AppColors.cardWhite,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: Colors.grey[200],
+        backgroundColor: AppColors.surfaceLight,
         selectedColor: AppColors.primary.fade(0.15),
         labelStyle: const TextStyle(fontSize: 13),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: AppColors.primary.fade(0.12),
+          borderRadius: AppRadius.pillAll,
+        ),
+        labelColor: AppColors.primary,
+        unselectedLabelColor: AppColors.textGrey,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
@@ -142,7 +157,7 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(64, AppSizes.buttonHeight),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
@@ -151,7 +166,7 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(64, AppSizes.buttonHeight),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
@@ -159,8 +174,8 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
           minimumSize: const Size(64, AppSizes.buttonHeight),
-          side: const BorderSide(color: AppColors.primary),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+          side: BorderSide(color: AppColors.primary.fade(0.35)),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
@@ -177,7 +192,7 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
@@ -197,23 +212,23 @@ class AppTheme {
         filled: true,
         fillColor: AppColors.cardWhite,
         border: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: AppRadius.lgAll,
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: AppRadius.lgAll,
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
           borderSide: BorderSide(color: colorScheme.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
           borderSide: BorderSide(color: colorScheme.error, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -248,7 +263,12 @@ class AppTheme {
         foregroundColor: AppColors.darkTextPrimary,
         centerTitle: true,
         elevation: 0,
-        scrolledUnderElevation: 2,
+        scrolledUnderElevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(AppRadius.lg),
+          ),
+        ),
         titleTextStyle: GoogleFonts.poppins(
           fontSize: 20,
           fontWeight: FontWeight.bold,
@@ -256,7 +276,7 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
         color: AppColors.darkCardBg,
@@ -266,6 +286,16 @@ class AppTheme {
         selectedColor: AppColors.darkPrimary.withValues(alpha: 0.2),
         labelStyle: GoogleFonts.poppins(fontSize: 13, color: AppColors.darkTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: AppColors.darkPrimary.withValues(alpha: 0.2),
+          borderRadius: AppRadius.pillAll,
+        ),
+        labelColor: AppColors.darkPrimary,
+        unselectedLabelColor: AppColors.darkTextSecondary,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.darkCardBg,
@@ -295,23 +325,23 @@ class AppTheme {
         ),
         hintStyle: GoogleFonts.poppins(color: AppColors.darkTextSecondary),
         border: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
-          borderSide: BorderSide(color: Colors.grey[800]!),
+          borderRadius: AppRadius.lgAll,
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
-          borderSide: BorderSide(color: Colors.grey[800]!),
+          borderRadius: AppRadius.lgAll,
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
-          borderSide: const BorderSide(color: AppColors.darkPrimary, width: 2),
+          borderRadius: AppRadius.lgAll,
+          borderSide: const BorderSide(color: AppColors.darkPrimary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
           borderSide: const BorderSide(color: Color(0xFFEF5350)),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
           borderSide: const BorderSide(color: Color(0xFFEF5350), width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(

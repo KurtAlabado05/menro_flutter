@@ -73,6 +73,9 @@ class ReportProvider extends ChangeNotifier {
   Future<void> addMeToo(String reportId) async {
     if (!hasUpvoted(reportId)) {
       await toggleUpvoteReport(reportId);
+      if (!hasUpvoted(reportId)) {
+        throw StateError('Could not add support to the nearby report.');
+      }
     }
   }
 

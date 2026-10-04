@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/constants/app_colors.dart';
+import '../core/constants/gradient_utils.dart';
+import 'animations.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -7,6 +10,7 @@ class EmptyState extends StatelessWidget {
   final VoidCallback? onAction;
   final String? actionLabel;
   final IconData actionIcon;
+  final bool useGradientIcon;
 
   const EmptyState({
     super.key,
@@ -16,6 +20,7 @@ class EmptyState extends StatelessWidget {
     this.onAction,
     this.actionLabel,
     this.actionIcon = Icons.add,
+    this.useGradientIcon = true,
   });
 
   @override
@@ -23,42 +28,91 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ExcludeSemantics(
-              child: Icon(icon, size: 72, color: Colors.grey[400]),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
+        child: FadeInAnimation(
+          duration: const Duration(milliseconds: 400),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ScaleInAnimation(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.elasticOut,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: useGradientIcon
+                      ? GradientUtils.primaryGradientDecoration(radius: 40)
+                      : BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                  child: Icon(
+                    icon,
+                    size: 40,
+                    color: useGradientIcon ? Colors.white : Colors.grey[600],
+                  ),
+                ),
               ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                subtitle!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-            ],
-            if (onAction != null && actionLabel != null) ...[
               const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: onAction,
-                icon: Icon(actionIcon),
-                label: Text(actionLabel!),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark,
+                ),
               ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textGrey,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+              if (onAction != null && actionLabel != null) ...[
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: Container(
+                    decoration:
+                        GradientUtils.primaryGradientDecoration(radius: 8),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onAction,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(actionIcon, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text(
+                              actionLabel!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
 

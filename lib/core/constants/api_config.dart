@@ -23,4 +23,14 @@ class ApiConfig {
     // Fallback: packaged app config (so Flutter Web works locally too).
     return ApiRuntimeConfig.identifySpeciesUrl;
   }
+
+  static String get validateTreePhotosUrl {
+    const override = String.fromEnvironment('VALIDATE_TREE_PHOTOS_URL');
+    if (override.trim().isNotEmpty) return override.trim();
+    final identify = Uri.parse(identifySpeciesUrl);
+    final segments = List<String>.of(identify.pathSegments);
+    if (segments.isNotEmpty) segments.removeLast();
+    segments.add('validateTreePhotos');
+    return identify.replace(pathSegments: segments).toString();
+  }
 }

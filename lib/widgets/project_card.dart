@@ -54,7 +54,7 @@ class ProjectCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.05),
+                color: AppColors.primary.withValues(alpha: 0.05),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
@@ -103,7 +103,7 @@ class ProjectCard extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: _statusColor.withOpacity(0.1),
+                      color: _statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -196,8 +196,8 @@ class ProjectCard extends StatelessWidget {
                       label: Text(isJoined ? 'Cancel' : 'Join'),
                       style: FilledButton.styleFrom(
                         backgroundColor: isJoined
-                            ? Colors.red.withOpacity(0.1)
-                            : AppColors.primary.withOpacity(0.1),
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : AppColors.primary.withValues(alpha: 0.1),
                         foregroundColor: isJoined
                             ? Colors.red
                             : AppColors.primary,

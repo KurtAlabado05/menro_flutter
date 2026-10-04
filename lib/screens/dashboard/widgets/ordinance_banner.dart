@@ -17,17 +17,9 @@ class OrdinanceBanner extends StatelessWidget {
         color: AppColors.cardWhite,
         borderRadius: AppRadius.lgAll,
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const OrdinancesScreen()),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.lgAll,
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
+        child: Stack(
+          children: [
+            Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Image.asset(
@@ -74,7 +66,19 @@ class OrdinanceBanner extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: AppRadius.lgAll,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrdinancesScreen()),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
